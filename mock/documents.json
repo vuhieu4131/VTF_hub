@@ -1,0 +1,53 @@
+[
+  {
+    "id": "doc-1",
+    "soKyHieu": "2013/VP-KSTT",
+    "trichYeu": "V/v thực hiện chế độ báo cáo công tác KSTTHC theo quy định tại Thông tư số 09/2026/TT-KSTT",
+    "donViBanHanh": "Văn phòng Bộ",
+    "donViNhan": "Văn phòng Quỹ",
+    "ngayDen": "2026-06-15",
+    "hanXuLy": "2026-06-18",
+    "trangThai": "pending"
+  },
+  {
+    "id": "doc-2",
+    "soKyHieu": "968/XNT",
+    "trichYeu": "Báo cáo kết quả công tác dân tộc, tín ngưỡng, tôn giáo 6 tháng đầu năm và phương hướng, nhiệm vụ 6 tháng cuối năm 2026",
+    "donViBanHanh": "Vụ Khoa học Xã hội Nhân văn và Tự nhiên",
+    "donViNhan": "Phòng Tổng hợp",
+    "ngayDen": "2026-06-15",
+    "hanXuLy": "2026-06-17",
+    "trangThai": "overdue",
+    "ghiChu": "Trễ hạn"
+  },
+  {
+    "id": "doc-3",
+    "soKyHieu": "1400/TCCB",
+    "trichYeu": "Báo cáo tình hình biên chế, nhân sự",
+    "donViBanHanh": "Vụ Tổ chức cán bộ",
+    "donViNhan": "Phòng Tổ chức Hành chính",
+    "ngayDen": "2026-06-15",
+    "hanXuLy": "2026-06-16",
+    "trangThai": "completed"
+  },
+  {
+    "id": "doc-4",
+    "soKyHieu": "918/TTTK",
+    "trichYeu": "V/v tiến hành Điều tra NC&PT năm 2026",
+    "donViBanHanh": "CỤC THÔNG TIN, THỐNG KÊ",
+    "donViNhan": "Văn phòng Quỹ",
+    "ngayDen": "2026-06-15",
+    "hanXuLy": "2026-06-25",
+    "trangThai": "warning"
+  },
+  {
+    "id": "doc-5",
+    "soKyHieu": "584-CV/ĐU",
+    "trichYeu": "V/v tăng cường công tác tuyên truyền phòng, chống ma túy năm 2026",
+    "donViBanHanh": "Đảng ủy Bộ Khoa học và Công nghệ",
+    "donViNhan": "Phòng Tổng hợp",
+    "ngayDen": "2026-06-15",
+    "hanXuLy": "2026-06-30",
+    "trangThai": "pending"
+  }
+]
