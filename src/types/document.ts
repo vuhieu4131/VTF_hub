@@ -1,19 +1,36 @@
-export type DocumentStatus = 'pending' | 'warning' | 'waiting' | 'overdue' | 'completed' | 'deleted';
+export type DocumentStatus = 'pending' | 'warning' | 'waiting' | 'overdue' | 'completed' | 'deleted' | 'info';
 
 export type UserRole = 'van_thu' | 'giam_doc' | 'truong_ban' | 'chuyen_vien';
+export type DepartmentId = 'van_thu' | 'ban_giam_doc' | 'ban_1' | 'ban_2' | 'ban_3' | 'ban_4' | 'ban_5';
+
+export interface User {
+  id: string;
+  name: string;
+  role: UserRole;
+  departmentId: DepartmentId;
+}
+
+export type DocumentType = 'external_in' | 'internal_cross' | 'internal_submit';
 
 export interface DocumentHistory {
   id: string;
-  action: 'create' | 'assign' | 'submit' | 'reject' | 'approve' | 'complete' | 'edit' | 'delete' | 'recall' | 'ask_opinion' | 'give_opinion';
+  action: 'create' | 'assign' | 'submit' | 'reject' | 'approve' | 'complete' | 'edit' | 'delete' | 'recall' | 'ask_opinion' | 'give_opinion' | 'forward_info';
   actorName: string;
   actorRole: UserRole;
   targetRole?: UserRole;
   timestamp: string; // ISO 8601
   note?: string;
+  targetDepartmentId?: string;
+  targetUserId?: string;
 }
 
 export interface Document {
   id: string;
+  documentType?: DocumentType;
+  internalStatus?: string; // e.g. cv_a_created, ld_a_reviewing, ld_b_reviewing, etc.
+  senderDepartmentId?: DepartmentId;
+  targetDepartmentIds?: DepartmentId[]; // Can be multiple for "gửi để biết"
+  
   soCongVanDen: string;
   ngayCVD: string; // Ngày công văn đến (ISO 8601 YYYY-MM-DD)
   soKyHieu: string;
@@ -23,13 +40,18 @@ export interface Document {
   hanXuLy?: string; // Hạn xử lý (ISO 8601 YYYY-MM-DD), optional
   trangThai: DocumentStatus;
   ghiChu?: string;
+  noiDungDeXuat?: string;
   
   // Publish Fields
   soVanBanPhatHanh?: string;
   ngayPhatHanh?: string;
   
-  // Phase 2 RBAC Fields
-  assigneeRole?: UserRole; // Who is currently holding this document
+  // RBAC Fields
+  assigneeRole?: UserRole; // Who is currently holding this document (for simple flows)
+  assigneeId?: string; // Specific user holding the document (e.g. for Trình LĐ Ban)
+  reporterIds?: string[]; // Users who receive this document as "Để báo cáo / Để biết"
   assigneeName?: string;
+  assignees?: { role: UserRole, departmentId: DepartmentId, userId?: string }[]; // For complex multi-recipient flows
   history?: DocumentHistory[];
+  createdAt?: string;
 }

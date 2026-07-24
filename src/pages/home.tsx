@@ -1,7 +1,7 @@
 import React from "react";
 import { Page, Box, Text, Input, Tabs } from "zmp-ui";
 import { useRecoilState, useRecoilValue } from "recoil";
-import { keywordState, filterStatusState, filteredDocumentListState, documentListState, FilterStatus, currentUserRoleState, showRejectedOnlyState } from "../state";
+import { keywordState, filterStatusState, filteredDocumentListState, documentListState, FilterStatus, currentUserState, showRejectedOnlyState } from "../state";
 import { DocumentCard } from "../components/document-card";
 
 const HomePage: React.FC = () => {
@@ -9,7 +9,8 @@ const HomePage: React.FC = () => {
   const [filter, setFilter] = useRecoilState(filterStatusState);
   const [showRejectedOnly, setShowRejectedOnly] = useRecoilState(showRejectedOnlyState);
   const documents = useRecoilValue(filteredDocumentListState);
-  const currentRole = useRecoilValue(currentUserRoleState);
+  const currentUser = useRecoilValue(currentUserState);
+  const currentRole = currentUser.role;
 
   const allDocuments = useRecoilValue(documentListState);
 
@@ -24,7 +25,14 @@ const HomePage: React.FC = () => {
   return (
     <Page className="bg-gray-50 flex flex-col relative h-full">
       <Box className="bg-blue-600 pt-10 pb-4 px-4 sticky top-0 z-10">
-        <Text className="text-white text-2xl font-bold mb-4">Văn bản VTCI</Text>
+        <Box className="flex justify-between items-center mb-4">
+          <Text className="text-white text-2xl font-bold">Văn bản VTCI</Text>
+          <Box className="bg-blue-700 px-3 py-1 rounded-full border border-blue-500">
+            <Text className="text-white text-xs font-medium">
+              {currentUser.name}
+            </Text>
+          </Box>
+        </Box>
         <Input.Search 
           placeholder="Tìm kiếm số ký hiệu, trích yếu..."
           value={keyword}

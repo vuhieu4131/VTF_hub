@@ -1,26 +1,33 @@
-import React, { FC } from "react";
-import { Box, Header, Icon, Page, Text, Avatar, Select } from "zmp-ui";
+import React, { FC, useMemo, useState } from "react";
+import { Box, Header, Icon, Page, Text, Avatar, Select, Button } from "zmp-ui";
 import { useRecoilValueLoadable, useRecoilState } from "recoil";
-import { userState, currentUserRoleState, currentUserNameState } from "../state";
-import { UserRole } from "../types/document";
+import { userState, currentUserState } from "../state";
+import { User, DepartmentId, UserRole } from "../types/document";
+
+import { mockUsers, departments } from "../mock/users";
+
+const roleLabels: Record<UserRole, string> = {
+  van_thu: "Văn thư",
+  giam_doc: "Lãnh đạo Cơ quan",
+  truong_ban: "Lãnh đạo Ban",
+  chuyen_vien: "Chuyên viên",
+};
 
 const ProfilePage: FC = () => {
   const userLoadable = useRecoilValueLoadable(userState);
-  const [role, setRole] = useRecoilState(currentUserRoleState);
-  const [name, setName] = useRecoilState(currentUserNameState);
+  const [currentUser, setCurrentUser] = useRecoilState(currentUserState);
 
-  const roleOptions: { value: UserRole; label: string; defaultName: string }[] = [
-    { value: "van_thu", label: "Văn thư", defaultName: "Nguyễn Văn Thư" },
-    { value: "giam_doc", label: "Giám đốc / Phó Giám đốc", defaultName: "Trần Giám Đốc" },
-    { value: "truong_ban", label: "Trưởng ban / Phó ban", defaultName: "Lê Trưởng Ban" },
-    { value: "chuyen_vien", label: "Chuyên viên", defaultName: "Phạm Chuyên Viên" },
-  ];
+  const [selectedDeptId, setSelectedDeptId] = useState<DepartmentId>(currentUser.departmentId);
+  const [selectedUserId, setSelectedUserId] = useState<string>(currentUser.id);
 
-  const handleRoleChange = (newRole: any) => {
-    setRole(newRole as UserRole);
-    const selected = roleOptions.find(r => r.value === newRole);
-    if (selected) {
-      setName(selected.defaultName);
+  const filteredUsers = useMemo(() => {
+    return mockUsers.filter((u) => u.departmentId === selectedDeptId);
+  }, [selectedDeptId]);
+
+  const handleLogin = () => {
+    const user = mockUsers.find(u => u.id === selectedUserId);
+    if (user) {
+      setCurrentUser(user);
     }
   };
 
@@ -38,25 +45,62 @@ const ProfilePage: FC = () => {
           />
           <Box className="flex-1">
             <Text className="font-bold text-lg text-gray-800">
-              {name}
+              {currentUser.name}
             </Text>
-            <Text className="text-gray-500 text-sm mt-1">Vai trò: {roleOptions.find(r => r.value === role)?.label}</Text>
+            <Text className="text-gray-500 text-sm mt-1">
+              Phòng/Ban: {departments.find(d => d.id === currentUser.departmentId)?.name}
+            </Text>
+            <Text className="text-gray-500 text-sm">
+              Vai trò: {roleLabels[currentUser.role]}
+            </Text>
           </Box>
         </Box>
 
         <Box className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
-          <Text className="font-bold text-blue-800 mb-2">Giả lập Phân quyền (Dev Only)</Text>
-          <Text className="text-sm text-blue-600 mb-3">Chuyển đổi vai trò để kiểm thử luồng nghiệp vụ luân chuyển văn bản.</Text>
-          <Select
-            value={role}
-            onChange={handleRoleChange}
-            closeOnSelect
-            className="bg-white"
-          >
-            {roleOptions.map(opt => (
-              <Select.Option key={opt.value} value={opt.value} title={opt.label} />
-            ))}
-          </Select>
+          <Text className="font-bold text-blue-800 mb-2">Giả lập Đăng nhập (Dev Only)</Text>
+          <Text className="text-sm text-blue-600 mb-3">Chọn Phòng/Ban và nhân sự để kiểm thử luồng nội bộ.</Text>
+          
+          <Box className="space-y-3">
+            <Box>
+              <Text className="text-sm font-medium mb-1">Phòng / Ban:</Text>
+              <Select
+                value={selectedDeptId}
+                onChange={(v) => {
+                  setSelectedDeptId(v as DepartmentId);
+                  const firstUserInDept = mockUsers.find(u => u.departmentId === v);
+                  if (firstUserInDept) setSelectedUserId(firstUserInDept.id);
+                }}
+                closeOnSelect
+                className="bg-white"
+              >
+                {departments.map(opt => (
+                  <Select.Option key={opt.id} value={opt.id} title={opt.name} />
+                ))}
+              </Select>
+            </Box>
+            
+            <Box>
+              <Text className="text-sm font-medium mb-1">Nhân sự:</Text>
+              <Select
+                value={selectedUserId}
+                onChange={(v) => setSelectedUserId(v as string)}
+                closeOnSelect
+                className="bg-white"
+              >
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map(opt => (
+                    <Select.Option key={opt.id} value={opt.id} title={`${opt.name} (${roleLabels[opt.role]})`} />
+                  ))
+                ) : (
+                  <Select.Option value="" title="Không có nhân sự" disabled />
+                )}
+              </Select>
+            </Box>
+
+            <Button onClick={handleLogin} fullWidth className="mt-2 !bg-blue-600 text-white">
+              Đăng nhập giả lập
+            </Button>
+          </Box>
         </Box>
 
         {/* Menu Items */}
@@ -76,15 +120,6 @@ const ProfilePage: FC = () => {
                 <Icon icon="zi-notif" className="text-blue-500" size={18} />
               </Box>
               <Text className="text-gray-700 font-medium">Cài đặt thông báo</Text>
-            </Box>
-            <Icon icon="zi-chevron-right" className="text-gray-400" />
-          </Box>
-          <Box className="flex items-center justify-between p-4 active:bg-gray-50">
-            <Box className="flex items-center space-x-3">
-              <Box className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                <Icon icon="zi-shield" className="text-blue-500" size={18} />
-              </Box>
-              <Text className="text-gray-700 font-medium">Quyền riêng tư</Text>
             </Box>
             <Icon icon="zi-chevron-right" className="text-gray-400" />
           </Box>

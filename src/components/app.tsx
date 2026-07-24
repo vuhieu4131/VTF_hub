@@ -4,6 +4,7 @@ import { RecoilRoot } from "recoil";
 import { getConfig } from "utils/config";
 import { Layout } from "./layout";
 import { ConfigProvider } from "./config-provider";
+import { FirebaseSync } from "./firebase-sync";
 
 const MyApp = () => {
   return (
@@ -15,6 +16,7 @@ const MyApp = () => {
         }}
       >
         <App>
+          <FirebaseSync />
           <SnackbarProvider>
             <ZMPRouter>
               <Layout />

@@ -1,16 +1,16 @@
 import { atom, selector } from "recoil";
 import { getUserInfo } from "zmp-sdk";
-import { Document, DocumentStatus, UserRole } from "types/document";
+import { Document, DocumentStatus, User, UserRole, DepartmentId } from "types/document";
 import documents from "../mock/documents.json";
 
-export const currentUserRoleState = atom<UserRole>({
-  key: "currentUserRole",
-  default: "van_thu",
-});
-
-export const currentUserNameState = atom<string>({
-  key: "currentUserName",
-  default: "Nguyễn Văn Thư (Văn thư)",
+export const currentUserState = atom<User>({
+  key: "currentUser",
+  default: {
+    id: "vt_1",
+    name: "Nguyễn Văn Thư 1",
+    role: "van_thu",
+    departmentId: "van_thu"
+  },
 });
 
 export const userState = selector({
@@ -27,7 +27,7 @@ export const userState = selector({
 
 export const documentListState = atom<Document[]>({
   key: "documentList",
-  default: documents as Document[],
+  default: [],
 });
 
 export const keywordState = atom({
@@ -53,7 +53,7 @@ export const filteredDocumentListState = selector<Document[]>({
     const filter = get(filterStatusState);
     const showRejectedOnly = get(showRejectedOnlyState);
     const docs = get(documentListState);
-    const currentRole = get(currentUserRoleState);
+    const currentUser = get(currentUserState);
     
     return docs.filter(doc => {
       if (showRejectedOnly) {
@@ -70,19 +70,55 @@ export const filteredDocumentListState = selector<Document[]>({
       
       const notDeleted = doc.trangThai !== 'deleted';
 
-      // RBAC filtering
-      let matchRole = true;
-      const isCurrentlyAssigned = doc.assigneeRole === currentRole || doc.assigneeRole === undefined;
-      const hasParticipated = doc.history?.some(h => h.actorRole === currentRole);
+      // Advanced RBAC filtering
+      let isAssigned = false;
+      
+      if (doc.trangThai === 'info') {
+        // Broadcast info document
+        if (!doc.targetDepartmentIds || doc.targetDepartmentIds.length === 0) {
+          isAssigned = true;
+        } else {
+          isAssigned = doc.targetDepartmentIds.includes(currentUser.departmentId);
+        }
+      } else if (doc.assigneeRole === currentUser.role || doc.assigneeRole === undefined) {
+        if (doc.assigneeId && doc.assigneeId !== currentUser.id) {
+          isAssigned = false;
+        } else if (!doc.documentType || doc.documentType === 'external_in') {
+          isAssigned = true;
+        } else {
+          const isSender = doc.senderDepartmentId === currentUser.departmentId;
+          const isTarget = doc.targetDepartmentIds?.includes(currentUser.departmentId);
 
+          if (doc.documentType === 'internal_submit') {
+            if (currentUser.role === 'giam_doc' || currentUser.role === 'van_thu') isAssigned = true;
+            else if (isSender) isAssigned = true;
+          } else if (doc.documentType === 'internal_cross') {
+            const status = doc.internalStatus;
+            if (['cv_a_created', 'ld_a_reviewing', 'ld_a_receiving', 'cv_a_summarizing'].includes(status || '')) {
+              isAssigned = isSender;
+            } else if (['ld_b_reviewing', 'cv_b_processing', 'ld_b_returning'].includes(status || '')) {
+              isAssigned = isTarget || false;
+            } else {
+              isAssigned = isSender || (isTarget || false);
+            }
+          }
+        }
+      }
+
+      const hasParticipated = doc.history?.some(h => 
+        (h.actorRole === currentUser.role && 
+        (!h.targetDepartmentId || h.targetDepartmentId === currentUser.departmentId)) ||
+        (h.targetUserId === currentUser.id) ||
+        (doc.reporterIds && doc.reporterIds.includes(currentUser.id))
+      ) || false;
+
+      let matchRole = false;
       if (filter === 'processed') {
-         matchRole = hasParticipated && !isCurrentlyAssigned;
-      } else if (currentRole === 'truong_ban' || currentRole === 'chuyen_vien') {
-         if (filter === 'all') {
-            matchRole = isCurrentlyAssigned || hasParticipated;
-         } else {
-            matchRole = isCurrentlyAssigned;
-         }
+         matchRole = hasParticipated && !isAssigned;
+      } else if (filter === 'all') {
+         matchRole = isAssigned || hasParticipated;
+      } else {
+         matchRole = isAssigned;
       }
       
       return matchStatus && matchKeyword && matchRole && notDeleted;
