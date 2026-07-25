@@ -1,35 +1,50 @@
-import React, { FC, useMemo, useState } from "react";
-import { Box, Header, Icon, Page, Text, Avatar, Select, Button } from "zmp-ui";
-import { useRecoilValueLoadable, useRecoilState } from "recoil";
+import React, { FC } from "react";
+import { Box, Header, Icon, Page, Text, Avatar, Button } from "zmp-ui";
+import { useRecoilValueLoadable, useRecoilValue } from "recoil";
+import { useNavigate } from "react-router-dom";
 import { userState, currentUserState } from "../state";
-import { User, DepartmentId, UserRole } from "../types/document";
-
-import { mockUsers, departments } from "../mock/users";
+import { UserRole } from "../types/document";
+import { departments } from "../constants/departments";
+import { signOut } from "firebase/auth";
+import { auth, db } from "../firebase";
+import { collection, getDocs, deleteDoc } from "firebase/firestore";
 
 const roleLabels: Record<UserRole, string> = {
   van_thu: "Văn thư",
-  giam_doc: "Lãnh đạo Cơ quan",
-  truong_ban: "Lãnh đạo Ban",
+  giam_doc: "Giám đốc",
+  truong_ban: "Trưởng/Phó Ban",
   chuyen_vien: "Chuyên viên",
 };
 
 const ProfilePage: FC = () => {
   const userLoadable = useRecoilValueLoadable(userState);
-  const [currentUser, setCurrentUser] = useRecoilState(currentUserState);
+  const currentUser = useRecoilValue(currentUserState);
+  const navigate = useNavigate();
 
-  const [selectedDeptId, setSelectedDeptId] = useState<DepartmentId>(currentUser.departmentId);
-  const [selectedUserId, setSelectedUserId] = useState<string>(currentUser.id);
-
-  const filteredUsers = useMemo(() => {
-    return mockUsers.filter((u) => u.departmentId === selectedDeptId);
-  }, [selectedDeptId]);
-
-  const handleLogin = () => {
-    const user = mockUsers.find(u => u.id === selectedUserId);
-    if (user) {
-      setCurrentUser(user);
+  const handleLogout = async () => {
+    try {
+      navigate("/login", { replace: true });
+      await signOut(auth);
+    } catch (error) {
+      console.error("Lỗi đăng xuất", error);
     }
   };
+
+  const handleClearDatabase = async () => {
+    if (window.confirm("BẠN CÓ CHẮC CHẮN MUỐN XÓA TOÀN BỘ VĂN BẢN TRONG CƠ SỞ DỮ LIỆU? (Hành động này không thể hoàn tác)")) {
+      try {
+        const querySnapshot = await getDocs(collection(db, "documents"));
+        const deletePromises = querySnapshot.docs.map(d => deleteDoc(d.ref));
+        await Promise.all(deletePromises);
+        alert("Đã xóa toàn bộ văn bản thành công!");
+      } catch (error) {
+        console.error("Lỗi xóa dữ liệu:", error);
+        alert("Xóa dữ liệu thất bại!");
+      }
+    }
+  };
+
+  if (!currentUser) return null;
 
   return (
     <Page className="bg-gray-50 flex flex-col h-full relative">
@@ -48,58 +63,11 @@ const ProfilePage: FC = () => {
               {currentUser.name}
             </Text>
             <Text className="text-gray-500 text-sm mt-1">
-              Phòng/Ban: {departments.find(d => d.id === currentUser.departmentId)?.name}
+              Ban: {departments.find(d => d.id === currentUser.departmentId)?.name}
             </Text>
             <Text className="text-gray-500 text-sm">
-              Vai trò: {roleLabels[currentUser.role]}
+              Chức vụ: {currentUser.jobTitle || roleLabels[currentUser.role]}
             </Text>
-          </Box>
-        </Box>
-
-        <Box className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-100">
-          <Text className="font-bold text-blue-800 mb-2">Giả lập Đăng nhập (Dev Only)</Text>
-          <Text className="text-sm text-blue-600 mb-3">Chọn Phòng/Ban và nhân sự để kiểm thử luồng nội bộ.</Text>
-          
-          <Box className="space-y-3">
-            <Box>
-              <Text className="text-sm font-medium mb-1">Phòng / Ban:</Text>
-              <Select
-                value={selectedDeptId}
-                onChange={(v) => {
-                  setSelectedDeptId(v as DepartmentId);
-                  const firstUserInDept = mockUsers.find(u => u.departmentId === v);
-                  if (firstUserInDept) setSelectedUserId(firstUserInDept.id);
-                }}
-                closeOnSelect
-                className="bg-white"
-              >
-                {departments.map(opt => (
-                  <Select.Option key={opt.id} value={opt.id} title={opt.name} />
-                ))}
-              </Select>
-            </Box>
-            
-            <Box>
-              <Text className="text-sm font-medium mb-1">Nhân sự:</Text>
-              <Select
-                value={selectedUserId}
-                onChange={(v) => setSelectedUserId(v as string)}
-                closeOnSelect
-                className="bg-white"
-              >
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map(opt => (
-                    <Select.Option key={opt.id} value={opt.id} title={`${opt.name} (${roleLabels[opt.role]})`} />
-                  ))
-                ) : (
-                  <Select.Option value="" title="Không có nhân sự" disabled />
-                )}
-              </Select>
-            </Box>
-
-            <Button onClick={handleLogin} fullWidth className="mt-2 !bg-blue-600 text-white">
-              Đăng nhập giả lập
-            </Button>
           </Box>
         </Box>
 
@@ -123,6 +91,17 @@ const ProfilePage: FC = () => {
             </Box>
             <Icon icon="zi-chevron-right" className="text-gray-400" />
           </Box>
+        </Box>
+        
+        <Button fullWidth variant="secondary" className="!bg-red-50 !text-red-600 border border-red-200" onClick={handleLogout}>
+          Đăng xuất
+        </Button>
+        
+        <Box className="mt-8 border-t border-red-200 pt-6">
+          <Text className="text-red-600 font-bold mb-2 text-center">Dành cho Nhà phát triển (Dev Only)</Text>
+          <Button fullWidth variant="primary" className="!bg-red-600 text-white" onClick={handleClearDatabase}>
+            Xóa toàn bộ Văn bản (Reset DB)
+          </Button>
         </Box>
       </Box>
     </Page>

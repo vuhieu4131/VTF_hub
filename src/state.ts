@@ -3,14 +3,14 @@ import { getUserInfo } from "zmp-sdk";
 import { Document, DocumentStatus, User, UserRole, DepartmentId } from "types/document";
 import documents from "../mock/documents.json";
 
-export const currentUserState = atom<User>({
+export const currentUserState = atom<User | null>({
   key: "currentUser",
-  default: {
-    id: "vt_1",
-    name: "Nguyễn Văn Thư 1",
-    role: "van_thu",
-    departmentId: "van_thu"
-  },
+  default: null,
+});
+
+export const userListState = atom<User[]>({
+  key: "userList",
+  default: [],
 });
 
 export const userState = selector({
@@ -55,6 +55,8 @@ export const filteredDocumentListState = selector<Document[]>({
     const docs = get(documentListState);
     const currentUser = get(currentUserState);
     
+    if (!currentUser) return [];
+    
     return docs.filter(doc => {
       if (showRejectedOnly) {
         const isRejected = doc.history && doc.history.length > 0 && doc.history[0].action === 'reject';
@@ -81,13 +83,20 @@ export const filteredDocumentListState = selector<Document[]>({
           isAssigned = doc.targetDepartmentIds.includes(currentUser.departmentId);
         }
       } else if (doc.assigneeRole === currentUser.role || doc.assigneeRole === undefined) {
-        if (doc.assigneeId && doc.assigneeId !== currentUser.id) {
+        let ignoreAssigneeId = false;
+        if (doc.documentType === 'internal_cross') {
+           if (['ld_b_reviewing', 'ld_a_receiving', 'cv_a_summarizing'].includes(doc.internalStatus || '')) {
+             ignoreAssigneeId = true;
+           }
+        }
+        
+        if (doc.assigneeId && doc.assigneeId !== currentUser.id && !ignoreAssigneeId) {
           isAssigned = false;
         } else if (!doc.documentType || doc.documentType === 'external_in') {
           isAssigned = true;
         } else {
           const isSender = doc.senderDepartmentId === currentUser.departmentId;
-          const isTarget = doc.targetDepartmentIds?.includes(currentUser.departmentId);
+          const isTarget = doc.targetDepartmentIds?.includes(currentUser.departmentId) || doc.targetUserIds?.includes(currentUser.id);
 
           if (doc.documentType === 'internal_submit') {
             if (currentUser.role === 'giam_doc' || currentUser.role === 'van_thu') isAssigned = true;
@@ -104,12 +113,8 @@ export const filteredDocumentListState = selector<Document[]>({
           }
         }
       }
-
-      const hasParticipated = doc.history?.some(h => 
-        (h.actorRole === currentUser.role && 
-        (!h.targetDepartmentId || h.targetDepartmentId === currentUser.departmentId)) ||
-        (h.targetUserId === currentUser.id) ||
-        (doc.reporterIds && doc.reporterIds.includes(currentUser.id))
+      const hasParticipated = doc.creatorId === currentUser.id || doc.history?.some(h => 
+        h.actorId === currentUser.id
       ) || false;
 
       let matchRole = false;

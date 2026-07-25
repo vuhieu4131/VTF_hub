@@ -10,6 +10,9 @@ const HomePage: React.FC = () => {
   const [showRejectedOnly, setShowRejectedOnly] = useRecoilState(showRejectedOnlyState);
   const documents = useRecoilValue(filteredDocumentListState);
   const currentUser = useRecoilValue(currentUserState);
+  
+  if (!currentUser) return null;
+  
   const currentRole = currentUser.role;
 
   const allDocuments = useRecoilValue(documentListState);
@@ -83,7 +86,7 @@ const HomePage: React.FC = () => {
           Hiển thị {documents.length} văn bản
         </Text>
         {documents.map((doc) => (
-          <DocumentCard key={doc.id} document={doc} />
+          <DocumentCard key={doc.id} document={doc} currentTab={filter} />
         ))}
         {documents.length === 0 && (
           <Box className="flex items-center justify-center py-10">

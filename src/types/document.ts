@@ -1,12 +1,14 @@
 export type DocumentStatus = 'pending' | 'warning' | 'waiting' | 'overdue' | 'completed' | 'deleted' | 'info';
 
 export type UserRole = 'van_thu' | 'giam_doc' | 'truong_ban' | 'chuyen_vien';
-export type DepartmentId = 'van_thu' | 'ban_giam_doc' | 'ban_1' | 'ban_2' | 'ban_3' | 'ban_4' | 'ban_5';
+export type DepartmentId = 'ban_giam_doc' | 'van_thu' | 'tchc' | 'khtc' | 'ptht' | 'htdv' | 'ksnb';
 
 export interface User {
   id: string;
   name: string;
+  email?: string;
   role: UserRole;
+  jobTitle?: string;
   departmentId: DepartmentId;
 }
 
@@ -22,14 +24,25 @@ export interface DocumentHistory {
   note?: string;
   targetDepartmentId?: string;
   targetUserId?: string;
+  targetDepartmentIds?: string[];
+  targetUserIds?: string[];
+  reporterIds?: string[];
+  actorId?: string;
+  previousState?: any;
+  noiDungDeXuat?: string;
+  senderDepartmentId?: string;
+  hanXuLy?: string;
 }
 
 export interface Document {
   id: string;
+  creatorId?: string;
+  creatorName?: string;
   documentType?: DocumentType;
   internalStatus?: string; // e.g. cv_a_created, ld_a_reviewing, ld_b_reviewing, etc.
   senderDepartmentId?: DepartmentId;
   targetDepartmentIds?: DepartmentId[]; // Can be multiple for "gửi để biết"
+  targetUserIds?: string[];
   
   soCongVanDen: string;
   ngayCVD: string; // Ngày công văn đến (ISO 8601 YYYY-MM-DD)
@@ -54,4 +67,5 @@ export interface Document {
   assignees?: { role: UserRole, departmentId: DepartmentId, userId?: string }[]; // For complex multi-recipient flows
   history?: DocumentHistory[];
   createdAt?: string;
+  readBy?: string[];
 }

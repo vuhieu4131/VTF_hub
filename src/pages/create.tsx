@@ -3,14 +3,16 @@ import { db } from "../firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { Page, Box, Text, Header, Input, Button, useNavigate, Switch, Select, Modal } from "zmp-ui";
 import { useRecoilState, useRecoilValue } from "recoil";
-import { documentListState, currentUserState } from "../state";
+import { documentListState, currentUserState, userListState } from "../state";
 import { Document, DocumentType } from "../types/document";
-import { mockUsers } from "../mock/users";
 
 const CreateDocument: React.FC = () => {
   const [docs, setDocs] = useRecoilState(documentListState);
   const currentUser = useRecoilValue(currentUserState);
+  const userList = useRecoilValue(userListState);
   const navigate = useNavigate();
+
+  if (!currentUser) return null;
 
   const [form, setForm] = useState({
     soKyHieu: "",
@@ -26,8 +28,8 @@ const CreateDocument: React.FC = () => {
   const [selectedReporterIds, setSelectedReporterIds] = useState<string[]>([]);
   
   const currentDeptLeaders = useMemo(() => {
-    return mockUsers.filter(u => u.departmentId === currentUser.departmentId && u.role === 'truong_ban');
-  }, [currentUser.departmentId]);
+    return userList.filter(u => u.departmentId === currentUser.departmentId && u.role === 'truong_ban');
+  }, [userList, currentUser.departmentId]);
 
   const [docType, setDocType] = useState<DocumentType>(currentUser.role === 'chuyen_vien' ? 'internal_cross' : 'external_in');
 
@@ -37,12 +39,12 @@ const CreateDocument: React.FC = () => {
     if (isInternal) {
       const myInternalDocsCount = docs.filter(d => 
         (d.documentType === 'internal_cross' || d.documentType === 'internal_submit') && 
-        d.history?.[0]?.actorName === currentUser.name
+        d.creatorId === currentUser.id
       ).length;
       return (myInternalDocsCount + 1).toString().padStart(3, '0');
     }
     return (docs.length + 1).toString().padStart(3, '0');
-  }, [docs, docType, currentUser.name, isInternal]);
+  }, [docs, isInternal, currentUser.id]);
   const todayDate = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const [hasDeadline, setHasDeadline] = useState(false);
@@ -60,8 +62,8 @@ const CreateDocument: React.FC = () => {
       return;
     }
     
-    const processor = mockUsers.find(u => u.id === selectedMainProcessorId);
-    const reporterNames = selectedReporterIds.map(id => mockUsers.find(u => u.id === id)?.name).join(', ');
+    const processor = userList.find(u => u.id === selectedMainProcessorId);
+    const reporterNames = selectedReporterIds.map(id => userList.find(u => u.id === id)?.name).join(', ');
     const reporterPart = reporterNames ? `; Để biết: ${reporterNames}` : '';
     const finalNote = `Xử lý chính: "${processor?.name}"${reporterPart} và Nội dung: ${submitLeaderNote || 'Không có'}`;
 
@@ -76,6 +78,8 @@ const CreateDocument: React.FC = () => {
 
     const newDoc: Document = {
       id: newDocId,
+      creatorId: currentUser.id,
+      creatorName: currentUser.name,
       documentType: docType,
       senderDepartmentId: currentUser.departmentId,
       internalStatus: internalStatus,
@@ -96,15 +100,28 @@ const CreateDocument: React.FC = () => {
         {
           id: Date.now().toString(),
           action: 'submit',
+          actorId: currentUser.id,
           actorName: currentUser.name,
           actorRole: currentUser.role,
           targetRole: 'truong_ban',
+          targetUserIds: [selectedMainProcessorId],
+          reporterIds: selectedReporterIds,
           timestamp: new Date().toISOString(),
-          note: finalNote
+          note: finalNote,
+          noiDungDeXuat: submitLeaderNote,
+          senderDepartmentId: currentUser.departmentId,
+          hanXuLy: hasDeadline ? form.hanXuLy : undefined,
+          previousState: {
+             trangThai: 'pending',
+             assigneeRole: 'chuyen_vien',
+             assigneeId: currentUser.id,
+             internalStatus: docType === 'internal_cross' ? 'cv_a_created' : 'cv_submit_created'
+          }
         },
         {
           id: (Date.now() - 100).toString(),
           action: 'create',
+          actorId: currentUser.id,
           actorName: currentUser.name,
           actorRole: currentUser.role,
           timestamp: new Date().toISOString()
@@ -143,6 +160,8 @@ const CreateDocument: React.FC = () => {
 
     const newDoc: Document = {
       id: newDocId,
+      creatorId: currentUser.id,
+      creatorName: currentUser.name,
       documentType: docType,
       senderDepartmentId: isInternal ? currentUser.departmentId : undefined,
       internalStatus: internalStatus,
@@ -160,6 +179,7 @@ const CreateDocument: React.FC = () => {
         {
           id: Date.now().toString(),
           action: 'create',
+          actorId: currentUser.id,
           actorName: currentUser.name,
           actorRole: currentUser.role,
           timestamp: new Date().toISOString()
@@ -306,36 +326,44 @@ const CreateDocument: React.FC = () => {
         <Box className="p-4 space-y-4">
           <Text className="font-medium text-gray-700">Chọn Lãnh đạo xử lý chính và báo cáo:</Text>
           <Box className="space-y-3 mt-2">
-            {currentDeptLeaders.map(leader => (
-              <Box key={leader.id} className="flex items-center justify-between p-2 border border-gray-100 rounded-lg bg-gray-50">
-                <Text className="font-medium flex-1">{leader.name}</Text>
-                <Box className="flex items-center space-x-4">
-                  <label className="flex items-center space-x-1 text-sm text-blue-600">
-                    <input 
-                      type="radio" 
-                      name="main_processor" 
-                      checked={selectedMainProcessorId === leader.id}
-                      onChange={() => setSelectedMainProcessorId(leader.id)}
-                      className="w-4 h-4"
-                    />
-                    <span>Xử lý</span>
-                  </label>
-                  <label className="flex items-center space-x-1 text-sm text-gray-600">
-                    <input 
-                      type="checkbox"
-                      checked={selectedReporterIds.includes(leader.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedReporterIds([...selectedReporterIds, leader.id]);
-                        else setSelectedReporterIds(selectedReporterIds.filter(id => id !== leader.id));
-                      }}
-                      disabled={selectedMainProcessorId === leader.id}
-                      className="w-4 h-4"
-                    />
-                    <span>Để biết</span>
-                  </label>
-                </Box>
+            {currentDeptLeaders.length === 0 ? (
+              <Box className="p-3 bg-red-50 border border-red-100 rounded-lg">
+                <Text className="text-red-500 text-sm">
+                  Không tìm thấy Trưởng/Phó ban nào trong đơn vị của bạn. Xin vui lòng đăng ký tài khoản Lãnh đạo cho ban này trước! (Debug: userList={userList.length})
+                </Text>
               </Box>
-            ))}
+            ) : (
+              currentDeptLeaders.map(leader => (
+                <Box key={leader.id} className="flex items-center justify-between p-2 border border-gray-100 rounded-lg bg-gray-50">
+                  <Text className="font-medium flex-1">{leader.name}</Text>
+                  <Box className="flex items-center space-x-4">
+                    <label className="flex items-center space-x-1 text-sm text-blue-600">
+                      <input 
+                        type="radio" 
+                        name="main_processor" 
+                        checked={selectedMainProcessorId === leader.id}
+                        onChange={() => setSelectedMainProcessorId(leader.id)}
+                        className="w-4 h-4"
+                      />
+                      <span>Xử lý</span>
+                    </label>
+                    <label className="flex items-center space-x-1 text-sm text-gray-600">
+                      <input 
+                        type="checkbox"
+                        checked={selectedReporterIds.includes(leader.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedReporterIds([...selectedReporterIds, leader.id]);
+                          else setSelectedReporterIds(selectedReporterIds.filter(id => id !== leader.id));
+                        }}
+                        disabled={selectedMainProcessorId === leader.id}
+                        className="w-4 h-4"
+                      />
+                      <span>Để biết</span>
+                    </label>
+                  </Box>
+                </Box>
+              ))
+            )}
           </Box>
           <Box className="mt-4">
             <Text className="font-medium text-gray-700 mb-2">Nội dung trình:</Text>

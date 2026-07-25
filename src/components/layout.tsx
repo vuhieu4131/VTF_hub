@@ -7,8 +7,12 @@ import StatisticsPage from "pages/statistics";
 import CreatePage from "pages/create";
 import DocumentDetailPage from "pages/document-detail";
 import ProfilePage from "pages/profile";
+import LoginPage from "pages/login";
+import RegisterPage from "pages/register";
 import { getSystemInfo } from "zmp-sdk";
 import { ScrollRestoration } from "./scroll-restoration";
+import { useRecoilValue } from "recoil";
+import { currentUserState } from "../state";
 
 if (import.meta.env.DEV) {
   document.body.style.setProperty("--zaui-safe-area-inset-top", "24px");
@@ -23,19 +27,30 @@ if (import.meta.env.DEV) {
 }
 
 export const Layout: FC = () => {
+  const currentUser = useRecoilValue(currentUserState);
+
   return (
     <Box flex flexDirection="column" className="h-screen relative">
       <ScrollRestoration />
       <Box className="flex-1 flex flex-col overflow-hidden relative">
         <Routes>
-          <Route path="/" element={<HomePage />}></Route>
-          <Route path="/statistics" element={<StatisticsPage />}></Route>
-          <Route path="/create" element={<CreatePage />}></Route>
-          <Route path="/document-detail" element={<DocumentDetailPage />}></Route>
-          <Route path="/profile" element={<ProfilePage />}></Route>
+          <Route path="/login" element={<LoginPage />}></Route>
+          <Route path="/register" element={<RegisterPage />}></Route>
+          
+          {currentUser ? (
+            <>
+              <Route path="/" element={<HomePage />}></Route>
+              <Route path="/statistics" element={<StatisticsPage />}></Route>
+              <Route path="/create" element={<CreatePage />}></Route>
+              <Route path="/document-detail" element={<DocumentDetailPage />}></Route>
+              <Route path="/profile" element={<ProfilePage />}></Route>
+            </>
+          ) : (
+            <Route path="*" element={<LoginPage />}></Route>
+          )}
         </Routes>
       </Box>
-      <Navigation />
+      {currentUser && <Navigation />}
     </Box>
   );
 };

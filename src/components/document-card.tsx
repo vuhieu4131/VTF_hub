@@ -2,13 +2,17 @@ import React from "react";
 import { Box, Text } from "zmp-ui";
 import { Document } from "types/document";
 import { useNavigate } from "react-router-dom";
+import { useRecoilValue } from "recoil";
+import { currentUserState } from "../state";
 
 interface DocumentCardProps {
   document: Document;
+  currentTab?: string;
 }
 
-export const DocumentCard: React.FC<DocumentCardProps> = ({ document }) => {
+export const DocumentCard: React.FC<DocumentCardProps> = ({ document, currentTab }) => {
   const navigate = useNavigate();
+  const currentUser = useRecoilValue(currentUserState);
   
   const statusColors: any = {
     pending: "text-orange-600",
@@ -35,9 +39,60 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document }) => {
   };
 
   const isRejected = document.history && document.history.length > 0 && document.history[0].action === 'reject';
-  const currentStatusBg = isRejected && document.trangThai === 'warning' ? "bg-red-100" : statusBg[document.trangThai];
-  const currentStatusColor = isRejected && document.trangThai === 'warning' ? "text-red-600" : statusColors[document.trangThai];
-  const currentStatusLabel = isRejected && document.trangThai === 'warning' ? "Bị trả lại" : statusLabels[document.trangThai];
+  
+  let isAssigned = false;
+  if (currentUser) {
+    if (document.trangThai === 'info') {
+      if (!document.targetDepartmentIds || document.targetDepartmentIds.length === 0) isAssigned = true;
+      else isAssigned = document.targetDepartmentIds.includes(currentUser.departmentId);
+    } else if (document.assigneeRole === currentUser.role || document.assigneeRole === undefined) {
+      let ignoreAssigneeId = false;
+      if (document.documentType === 'internal_cross') {
+         if (['ld_b_reviewing', 'ld_a_receiving', 'cv_a_summarizing'].includes(document.internalStatus || '')) {
+           ignoreAssigneeId = true;
+         }
+      }
+      
+      if (document.assigneeId && document.assigneeId !== currentUser.id && !ignoreAssigneeId) {
+        isAssigned = false;
+      } else if (!document.documentType || document.documentType === 'external_in') {
+        isAssigned = true;
+      } else {
+        const isSender = document.senderDepartmentId === currentUser.departmentId;
+        const isTarget = document.targetDepartmentIds?.includes(currentUser.departmentId) || document.targetUserIds?.includes(currentUser.id);
+
+        if (document.documentType === 'internal_submit') {
+          if (currentUser.role === 'giam_doc' || currentUser.role === 'van_thu') isAssigned = true;
+          else if (isSender) isAssigned = true;
+        } else if (document.documentType === 'internal_cross') {
+          const status = document.internalStatus;
+          if (['cv_a_created', 'ld_a_reviewing', 'ld_a_receiving', 'cv_a_summarizing'].includes(status || '')) {
+            isAssigned = isSender;
+          } else if (['ld_b_reviewing', 'cv_b_processing', 'ld_b_returning'].includes(status || '')) {
+            isAssigned = isTarget || false;
+          } else {
+            isAssigned = isSender || (isTarget || false);
+          }
+        }
+      }
+    }
+  }
+
+  const hasParticipated = currentUser ? (document.creatorId === currentUser.id || document.history?.some(h => 
+    h.actorId === currentUser.id
+  ) || false) : false;
+
+  const isProcessed = hasParticipated && !isAssigned;
+
+  let currentStatusBg = isRejected && document.trangThai === 'warning' ? "bg-red-100" : statusBg[document.trangThai];
+  let currentStatusColor = isRejected && document.trangThai === 'warning' ? "text-red-600" : statusColors[document.trangThai];
+  let currentStatusLabel = isRejected && document.trangThai === 'warning' ? "Bị trả lại" : statusLabels[document.trangThai];
+
+  if (isProcessed) {
+    currentStatusBg = "bg-green-100";
+    currentStatusColor = "text-green-600";
+    currentStatusLabel = "Đã xử lý";
+  }
 
   return (
     <Box 
