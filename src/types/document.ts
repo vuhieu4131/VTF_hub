@@ -24,7 +24,9 @@ export interface DocumentHistory {
   note?: string;
   targetDepartmentId?: string;
   targetUserId?: string;
+  assigneeId?: string;
   targetDepartmentIds?: string[];
+  isReturn?: boolean;
   targetUserIds?: string[];
   reporterIds?: string[];
   actorId?: string;

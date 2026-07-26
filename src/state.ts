@@ -82,37 +82,47 @@ export const filteredDocumentListState = selector<Document[]>({
         } else {
           isAssigned = doc.targetDepartmentIds.includes(currentUser.departmentId);
         }
-      } else if (doc.assigneeRole === currentUser.role || doc.assigneeRole === undefined) {
-        let ignoreAssigneeId = false;
-        if (doc.documentType === 'internal_cross') {
-           if (['ld_b_reviewing', 'ld_a_receiving', 'cv_a_summarizing'].includes(doc.internalStatus || '')) {
-             ignoreAssigneeId = true;
-           }
-        }
-        
-        if (doc.assigneeId && doc.assigneeId !== currentUser.id && !ignoreAssigneeId) {
-          isAssigned = false;
-        } else if (!doc.documentType || doc.documentType === 'external_in') {
+      } else {
+        if (!doc.documentType || doc.documentType === 'external_in') {
           isAssigned = true;
         } else {
-          const isSender = doc.senderDepartmentId === currentUser.departmentId;
-          const isTarget = doc.targetDepartmentIds?.includes(currentUser.departmentId) || doc.targetUserIds?.includes(currentUser.id);
+          const history = doc.history || [];
+          const latestRelevantEvent = history.find(h => {
+             const isActor = h.actorId === currentUser.id;
+             const isTargetUser = h.targetUserIds?.includes(currentUser.id) || h.reporterIds?.includes(currentUser.id);
+             let isTargetDept = false;
+             if (h.targetDepartmentIds?.includes(currentUser.departmentId)) {
+                 if (h.targetRole) {
+                    isTargetDept = h.targetRole === currentUser.role;
+                 } else {
+                    isTargetDept = true;
+                 }
+                 if (currentUser.role === 'truong_ban') isTargetDept = true;
+             }
+             return isActor || isTargetUser || isTargetDept;
+          });
 
-          if (doc.documentType === 'internal_submit') {
-            if (currentUser.role === 'giam_doc' || currentUser.role === 'van_thu') isAssigned = true;
-            else if (isSender) isAssigned = true;
-          } else if (doc.documentType === 'internal_cross') {
-            const status = doc.internalStatus;
-            if (['cv_a_created', 'ld_a_reviewing', 'ld_a_receiving', 'cv_a_summarizing'].includes(status || '')) {
-              isAssigned = isSender;
-            } else if (['ld_b_reviewing', 'cv_b_processing', 'ld_b_returning'].includes(status || '')) {
-              isAssigned = isTarget || false;
-            } else {
-              isAssigned = isSender || (isTarget || false);
-            }
+          if (latestRelevantEvent) {
+             if (latestRelevantEvent.actorId === currentUser.id) {
+                 const isAlsoTarget = (latestRelevantEvent.targetUserIds?.includes(currentUser.id)) || 
+                                      (latestRelevantEvent.targetDepartmentIds?.includes(currentUser.departmentId) && 
+                                       (latestRelevantEvent.targetRole === currentUser.role || currentUser.role === 'truong_ban'));
+                 isAssigned = !!isAlsoTarget; 
+             } else {
+                 isAssigned = true;
+             }
+          } else {
+             if (doc.documentType === 'internal_submit' && (currentUser.role === 'giam_doc' || currentUser.role === 'van_thu')) {
+                 isAssigned = true;
+             } else if (doc.creatorId === currentUser.id) {
+                 isAssigned = doc.trangThai === 'pending' || doc.trangThai === 'waiting';
+             } else {
+                 isAssigned = false;
+             }
           }
         }
       }
+
       const hasParticipated = doc.creatorId === currentUser.id || doc.history?.some(h => 
         h.actorId === currentUser.id
       ) || false;

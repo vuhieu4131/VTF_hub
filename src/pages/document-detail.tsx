@@ -7,6 +7,7 @@ import { documentListState, currentUserState, userListState } from "../state";
 import { useSearchParams } from "react-router-dom";
 import { DocumentStatus, UserRole, DepartmentId, DocumentHistory } from "../types/document";
 import { departments } from "../constants/departments";
+import { getBranchStatus } from "../utils/workflow";
 
 const isDateOverdue = (targetDateStr: string | undefined, baseDateStr: string | undefined) => {
   if (!targetDateStr || !baseDateStr) return false;
@@ -25,8 +26,9 @@ const TimelineItem = ({ h, getActionLabel, userList }: { h: any, getActionLabel:
 
   const targetDeptNames = h.targetDepartmentIds?.map((id: string) => departments.find(d => d.id === id)?.name || id) || [];
   const targetUserNames = h.targetUserIds?.map((id: string) => userList.find(u => u.id === id)?.name || id) || [];
+  const reporterUserNames = h.reporterIds?.map((id: string) => userList.find(u => u.id === id)?.name + ' (Để biết)' || id + ' (Để biết)') || [];
   
-  const allTargets = [...targetDeptNames, ...targetUserNames];
+  const allTargets = [...targetDeptNames, ...targetUserNames, ...reporterUserNames];
 
   return (
     <Box className="relative pl-6 border-l-2 border-blue-200">
@@ -114,6 +116,9 @@ const DocumentDetail: React.FC = () => {
   const [expandedDepts, setExpandedDepts] = useState<string[]>([]);
   const [selectDeptNote, setSelectDeptNote] = useState('');
   const [selectDeptDeadline, setSelectDeptDeadline] = useState('');
+  
+  const [replyModalVisible, setReplyModalVisible] = useState(false);
+  const [replyNote, setReplyNote] = useState('');
 
   const [publishInfoModalVisible, setPublishInfoModalVisible] = useState(false);
   const [selectedMultiDepts, setSelectedMultiDepts] = useState<DepartmentId[]>([]);
@@ -122,12 +127,14 @@ const DocumentDetail: React.FC = () => {
   const [submitLeaderModalVisible, setSubmitLeaderModalVisible] = useState(false);
   const [submitLeaderStatus, setSubmitLeaderStatus] = useState<string>('');
   const [submitLeaderNote, setSubmitLeaderNote] = useState<string>('');
+  const [submitTargetUserIds, setSubmitTargetUserIds] = useState<string[]>([]);
   const [selectedMainProcessorId, setSelectedMainProcessorId] = useState<string>('');
   const [selectedReporterIds, setSelectedReporterIds] = useState<string[]>([]);
 
   const [assignCrossModalVisible, setAssignCrossModalVisible] = useState(false);
   const [assignCrossUserIds, setAssignCrossUserIds] = useState<string[]>([]);
   const [assignCrossNote, setAssignCrossNote] = useState('');
+  const [assignCrossDeadline, setAssignCrossDeadline] = useState('');
   
   const [finishCrossModalVisible, setFinishCrossModalVisible] = useState(false);
   const [finishCrossNote, setFinishCrossNote] = useState('');
@@ -208,6 +215,7 @@ const DocumentDetail: React.FC = () => {
       else if (extraUpdates.assigneeId) newEvent.targetUserIds = [extraUpdates.assigneeId];
       
       if (extraUpdates.targetDepartmentIds) newEvent.targetDepartmentIds = extraUpdates.targetDepartmentIds;
+      if (extraUpdates.isReturn) newEvent.isReturn = extraUpdates.isReturn;
       
       if (extraUpdates.reporterIds) newEvent.reporterIds = extraUpdates.reporterIds;
       
@@ -238,20 +246,56 @@ const DocumentDetail: React.FC = () => {
     }
 
     const isTransfer = ['assign', 'submit', 'reject', 'approve', 'forward_info'].includes(action);
+    
+    // We do not want to overwrite the document's original noiDungDeXuat with intermediate step notes.
+    const rootUpdates = { ...mergedUpdates };
+    delete rootUpdates.noiDungDeXuat;
+
     const updatedData: any = {
       trangThai: newStatus || document.trangThai,
       assigneeRole: nextRole || document.assigneeRole,
-      ...mergedUpdates,
+      ...rootUpdates,
       history: addHistory(document, action, note, nextRole, mergedUpdates)
     };
 
-    if (isTransfer) {
-      updatedData.readBy = [];
-      if (mergedUpdates.assigneeId === undefined) {
-        updatedData.assigneeId = deleteField();
+    if (action === 'assign' || action === 'forward_info' || action === 'submit' || action === 'approve') {
+      if (mergedUpdates.targetUserIds) {
+        let newTargets = [...(document.targetUserIds || [])];
+        if (action === 'assign' || action === 'submit') {
+           newTargets = newTargets.filter(id => id !== currentUser.id);
+        }
+        updatedData.targetUserIds = Array.from(new Set([...newTargets, ...mergedUpdates.targetUserIds]));
+      }
+      
+      if (mergedUpdates.targetDepartmentIds) {
+         let newDeptTargets = [...(document.targetDepartmentIds || [])];
+         if (action === 'assign' || action === 'submit') {
+            newDeptTargets = newDeptTargets.filter(id => id !== currentUser.departmentId);
+         }
+         updatedData.targetDepartmentIds = Array.from(new Set([...newDeptTargets, ...mergedUpdates.targetDepartmentIds]));
+      } else if ((action === 'assign' || action === 'submit') && document.targetDepartmentIds) {
+         updatedData.targetDepartmentIds = document.targetDepartmentIds.filter(id => id !== currentUser.departmentId);
       }
     }
 
+    if (isTransfer) {
+      let targetsToRemove: string[] = [];
+      if (mergedUpdates.targetUserIds) {
+         targetsToRemove = [...mergedUpdates.targetUserIds];
+      }
+      if (mergedUpdates.targetDepartmentIds) {
+         const deptUsers = userList.filter(u => mergedUpdates.targetDepartmentIds.includes(u.departmentId)).map(u => u.id);
+         targetsToRemove = [...targetsToRemove, ...deptUsers];
+      }
+      
+      const currentReadBy = document.readBy || [];
+      updatedData.readBy = [...new Set([...currentReadBy, currentUser.id])].filter(uid => !targetsToRemove.includes(uid));
+
+      if (mergedUpdates.assigneeId === undefined && isTransfer && !updatedData.targetUserIds) {
+        updatedData.assigneeId = deleteField();
+      }
+    }
+    
     // Protect the original deadline from being overwritten by intermediate transfers
     if (mergedUpdates.hanXuLy && document.hanXuLy && action !== 'edit') {
        updatedData.hanXuLy = document.hanXuLy;
@@ -286,8 +330,8 @@ const DocumentDetail: React.FC = () => {
     setSelectDeptDeadline('');
     
     // Navigate home for some actions if needed, otherwise stay.
-    // Currently, only submitLeader and assignCross explicitly navigate home.
-    if (isTransfer && !['assign', 'forward_info'].includes(action)) {
+    // We navigate home on assign to keep the user moving
+    if (isTransfer && !['forward_info'].includes(action)) {
       navigate('/', { replace: true });
     }
   };
@@ -398,35 +442,115 @@ const DocumentDetail: React.FC = () => {
     }
     if (status === 'ld_a_reviewing' && currentRole === 'truong_ban' && isSenderDept) {
       return (
-        <Button className="flex-1 !bg-blue-600 text-white" onClick={() => setSelectDeptModalVisible(true)}>
-          Chọn & Gửi Ban khác
-        </Button>
-      );
-    }
-    if (status === 'ld_b_reviewing' && currentRole === 'truong_ban' && isTargetUserOrDept) {
-      return (
         <>
-          <Button className="flex-1 !bg-red-500 text-white" onClick={() => setFinishCrossModalVisible(true)}>
-            Kết thúc
+          <Button variant="secondary" className="flex-1 text-red-600 border border-red-200" onClick={() => setRejectModalVisible(true)}>
+            Trả lời (Trả lại CV)
           </Button>
-          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => setAssignCrossModalVisible(true)}>
-            Phân công CV xử lý
+          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => setSelectDeptModalVisible(true)}>
+            Chọn & Gửi Ban khác
           </Button>
         </>
       );
     }
-    if (status === 'cv_b_processing' && currentRole === 'chuyen_vien' && isTargetUserOrDept) {
+    
+    const isExplicitTarget = document.targetUserIds?.includes(currentUser.id);
+    const isActingAsChuyenVien = currentRole === 'chuyen_vien' || (currentRole === 'truong_ban' && isExplicitTarget && document.assigneeRole === 'chuyen_vien');
+    const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId) : 'completed';
+
+    if (currentRole === 'truong_ban' && (branchStatus === 'processing' || branchStatus === 'waiting_reply')) {
+      const history = document.history || [];
+      const receivedEventIndex = history.findIndex(h => h.targetUserIds?.includes(currentUser.id) || (h.targetDepartmentIds && h.targetDepartmentIds.some(id => id.toLowerCase() === currentUser.departmentId.toLowerCase())));
+      let latestDelegationIndex = history.findIndex((h, i) => 
+        h.actorId === currentUser.id && (
+          ['assign', 'forward_info'].includes(h.action) || 
+          (!h.isReturn && h.actorRole !== 'chuyen_vien' && ['submit', 'approve'].includes(h.action) && ((h.targetUserIds && h.targetUserIds.length > 0) || (h.targetDepartmentIds && h.targetDepartmentIds.length > 0)))
+        )
+      );
+
+      const isWaitingForExternal = document.trangThai === 'waiting';
+      const delegationEvent = latestDelegationIndex !== -1 ? history[latestDelegationIndex] : null;
+      let allCompleted = true;
+      if (delegationEvent) {
+         const delegates = [...(delegationEvent.targetUserIds || []), ...(delegationEvent.targetDepartmentIds || [])];
+         for (const delegateId of delegates) {
+            const delegateStatus = getBranchStatus(document, delegateId, currentUser.departmentId);
+            if (delegateStatus !== 'completed') {
+               allCompleted = false;
+               break;
+            }
+         }
+      }
+
+      // Did the user already submit back after receiving?
+      // Since history is newest first, check if there is a 'submit' from this user AFTER the delegation 
+      // but BEFORE the received event.
+      const hasSubmittedBack = latestDelegationIndex !== -1 && history.findIndex((h, i) => h.actorId === currentUser.id && h.action === 'submit' && i < latestDelegationIndex && (receivedEventIndex === -1 || i > receivedEventIndex)) !== -1;
+      
+      const isCreator = currentUser.id === document.creatorId;
+
       return (
-        <Button className="flex-1 !bg-blue-600 text-white" onClick={() => handleAction('submit', 'truong_ban', 'pending', { internalStatus: 'ld_b_returning' }, 'Đã xử lý xong, trình LĐ Ban trả kết quả')}>
-          Trình LĐ Ban (Đã xử lý xong)
-        </Button>
+        <>
+          {isCreator && (latestDelegationIndex === -1 || (allCompleted && !hasSubmittedBack && !isWaitingForExternal)) && (
+            <Button className="flex-1 !bg-red-500 text-white" onClick={() => handleAction('complete', 'truong_ban', 'completed', undefined, 'Kết thúc')}>
+              Kết thúc
+            </Button>
+          )}
+
+          {!isCreator && !isWaitingForExternal && (
+            <Button className="flex-1 !bg-green-600 text-white" onClick={() => setReplyModalVisible(true)}>
+              Trả lời
+            </Button>
+          )}
+
+          {!isWaitingForExternal && (
+            <Button className="flex-1 !bg-blue-600 text-white" onClick={() => setAssignCrossModalVisible(true)}>
+              Giao CV xử lý
+            </Button>
+          )}
+        </>
       );
     }
-    if (status === 'ld_b_returning' && currentRole === 'truong_ban' && isTargetUserOrDept) {
+    
+    if (isActingAsChuyenVien && (branchStatus === 'processing' || branchStatus === 'waiting_reply')) {
+      const isCreator = currentUser.id === document.creatorId;
       return (
-        <Button className="flex-1 !bg-blue-600 text-white" onClick={() => handleAction('approve', 'truong_ban', 'pending', { internalStatus: 'ld_a_receiving' }, 'Ký gửi trả lại kết quả cho Ban yêu cầu')}>
-          Ký gửi trả Ban A
-        </Button>
+        <>
+          {isCreator && branchStatus === 'waiting_reply' && (
+            <>
+              <Button className="flex-1 !bg-red-500 text-white" onClick={() => handleAction('complete', currentRole, 'completed', undefined, 'Kết thúc')}>
+                Kết thúc
+              </Button>
+              <Button className="flex-1 !bg-blue-600 text-white" onClick={() => { 
+                setSubmitTargetUserIds([]);
+                setSubmitTargetRole('truong_ban'); 
+                setSubmitResultModalVisible(true); 
+              }}>
+                Trình LĐ Ban
+              </Button>
+            </>
+          )}
+          {!isCreator && branchStatus === 'processing' && (
+            <Button className="flex-1 !bg-blue-600 text-white" onClick={() => { 
+              const receivedEvent = document.history?.find(h => 
+                (!h.isReturn) && (
+                  h.targetUserIds?.includes(currentUser.id) || 
+                  h.assigneeId === currentUser.id || 
+                  h.targetDepartmentIds?.some(id => id.toLowerCase() === currentUser.departmentId.toLowerCase())
+                )
+              );
+              
+              if (receivedEvent && receivedEvent.actorId) {
+                setSubmitTargetUserIds([receivedEvent.actorId]);
+              } else {
+                setSubmitTargetUserIds([]);
+              }
+              setSubmitTargetRole('truong_ban'); 
+              setSubmitResultModalVisible(true); 
+            }}>
+              Trình LĐ Ban
+            </Button>
+          )}
+        </>
       );
     }
     if (status === 'ld_a_receiving' && currentRole === 'truong_ban' && isSenderDept) {
@@ -506,14 +630,19 @@ const DocumentDetail: React.FC = () => {
   };
 
   const getActionLabel = (h: any) => {
+    if (h.action === 'submit') {
+      if (h.isReturn && h.actorRole === 'truong_ban') return "Trả lời";
+      if (h.actorRole === 'chuyen_vien') return "Trình LĐ Ban";
+      if (h.actorRole === 'truong_ban') return "Trình Lãnh đạo";
+      return "Trình lên trên";
+    }
     const map: any = {
       create: "Tạo mới văn bản",
-      assign: "Phân công xử lý",
-      submit: "Trình lên trên",
-      reject: "Chuyển trả lại",
-      approve: "Đã duyệt",
-      complete: "Đóng hồ sơ / Hoàn thành",
-      edit: "Đã cập nhật (Sửa) thông tin",
+      assign: "Giao việc",
+      reject: "Trả lại",
+      approve: "Ký duyệt",
+      complete: "Kết thúc",
+      edit: "Cập nhật thông tin",
       forward_info: "Gửi thông tin (để biết)"
     };
     return map[h.action] || h.action;
@@ -535,6 +664,34 @@ const DocumentDetail: React.FC = () => {
       senderDepartmentId: currentUser.departmentId,
       ...(selectDeptDeadline ? { hanXuLy: selectDeptDeadline } : {})
     }, selectDeptNote || `Gửi văn bản liên thông`, targetDeptIds[0]);
+  };
+
+  const handleReplySubmit = () => {
+    if (!replyNote) {
+      alert("Vui lòng nhập nội dung trả lời!");
+      return;
+    }
+    
+    const receivedEvent = document.history?.find(h => 
+      (!h.isReturn) && (
+        h.targetUserIds?.includes(currentUser.id) || 
+        h.assigneeId === currentUser.id || 
+        h.reporterIds?.includes(currentUser.id) || 
+        h.targetDepartmentIds?.some(id => id.toLowerCase() === currentUser.departmentId.toLowerCase())
+      )
+    );
+
+    if (!receivedEvent) return;
+
+    const targetUserId = receivedEvent.actorId;
+
+    handleAction('submit', receivedEvent.actorRole || 'truong_ban', 'pending', { 
+      targetUserIds: [targetUserId],
+      noiDungDeXuat: replyNote,
+      isReturn: true
+    }, replyNote);
+    
+    setReplyModalVisible(false);
   };
 
   const handlePublishInfoSubmit = () => {
@@ -571,16 +728,39 @@ const DocumentDetail: React.FC = () => {
       alert("Vui lòng chọn ít nhất 1 người xử lý!");
       return;
     }
+    if (isDateOverdue(assignCrossDeadline, currentDeadline)) return;
+    
     const assigneeNames = assignCrossUserIds.map(id => userList.find(u => u.id === id)?.name).join(', ');
-    handleAction('assign', 'chuyen_vien', 'pending', { 
+    const noteText = assignCrossNote || `Phân công cho: ${assigneeNames}`;
+    const extraUpdates: any = { 
       internalStatus: 'cv_b_processing',
       targetUserIds: assignCrossUserIds
-    }, assignCrossNote || `Phân công cho: ${assigneeNames}`);
+    };
+    if (assignCrossDeadline) {
+      extraUpdates.hanXuLy = assignCrossDeadline;
+    }
+    
+    // Pass noteText as noiDungDeXuat to history, but don't overwrite document.noiDungDeXuat
+    // wait, handleAction spreads extraUpdates to document. To avoid this, we can pass noteText in `note` arg
+    // and rely on addHistory's behavior. addHistory doesn't take noiDungDeXuat from args unless it's in extraUpdates.
+    // Let's pass it in extraUpdates, but ensure handleAction doesn't overwrite document.noiDungDeXuat if we want to preserve it.
+    // Actually, overwriting document.noiDungDeXuat is fine for the "current" processing state. Let's keep it in extraUpdates.
+    extraUpdates.noiDungDeXuat = noteText;
+    
+    handleAction('assign', 'chuyen_vien', 'pending', extraUpdates, noteText);
   };
 
   const handleFinishCrossSubmit = () => {
+    const history = document?.history || [];
+    const assignmentEvent = history.find(h => 
+       h.targetUserIds?.includes(currentUser?.id || '') || 
+       (h.targetDepartmentIds && h.targetDepartmentIds.includes(currentUser?.departmentId || ''))
+    );
+    const leaderId = assignmentEvent ? assignmentEvent.actorId : undefined;
+    
     handleAction('approve', 'truong_ban', 'pending', { 
-      internalStatus: 'ld_a_receiving' 
+      internalStatus: 'ld_a_receiving',
+      ...(leaderId ? { targetUserIds: [leaderId] } : {})
     }, finishCrossNote || 'Lãnh đạo trực tiếp xử lý và kết thúc');
   };
 
@@ -617,6 +797,26 @@ const DocumentDetail: React.FC = () => {
           <Box className="mb-3">
             <Text className="text-gray-500 text-sm mb-1">Trích yếu:</Text>
             <Text className="text-gray-800 text-base leading-relaxed">{document.trichYeu}</Text>
+          </Box>
+          <Box className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-sm">
+            <Text className="font-semibold text-gray-800 mb-2">Trạng thái nhánh</Text>
+            {(() => {
+              const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId) : 'completed';
+              let branchLabel = 'Đang xử lý';
+              let branchClass = 'text-orange-600';
+              if (branchStatus === 'completed') {
+                  branchLabel = 'Đã hoàn thành';
+                  branchClass = 'text-green-600';
+              } else if (branchStatus === 'waiting_reply') {
+                  branchLabel = 'Đã hoàn thành (Chờ trả lời)';
+                  branchClass = 'text-blue-600';
+              }
+              return (
+                <Text className={`font-medium ${branchClass}`}>
+                  {branchLabel}
+                </Text>
+              );
+            })()}
           </Box>
           <Box className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
             <Text className="text-gray-500 text-sm">Trạng thái:</Text>
@@ -663,6 +863,11 @@ const DocumentDetail: React.FC = () => {
                 h.actorId === currentUser.id
               ) || false;
               
+              const branchStatus = getBranchStatus(document, currentUser.id, currentUser.departmentId);
+              if (branchStatus === 'completed') {
+                isAssigned = false;
+              }
+              
               const isProcessed = hasParticipated && !isAssigned;
               
               let currentClasses = statusColors[document.trangThai] || "bg-gray-100 text-gray-800";
@@ -674,8 +879,49 @@ const DocumentDetail: React.FC = () => {
               }
               
               if (isProcessed) {
-                currentClasses = "bg-green-100 text-green-600";
-                currentStatusLabel = "Đã xử lý";
+                if (document.creatorId === currentUser.id && document.trangThai !== 'completed') {
+                  currentClasses = "bg-purple-100 text-purple-600";
+                  currentStatusLabel = "Hệ thống đang xử lý";
+                } else if (branchStatus === 'completed' && document.trangThai !== 'completed') {
+                  currentClasses = "bg-green-100 text-green-600";
+                  currentStatusLabel = "Hoàn thành";
+                } else if (document.trangThai !== 'completed') {
+                  currentClasses = "bg-purple-100 text-purple-600";
+                  currentStatusLabel = "Hệ thống đang xử lý";
+                }
+              }
+
+              if (document.hanXuLy) {
+                const parseDate = (s: string) => {
+                  if (s.includes('/')) {
+                    const p = s.split('/');
+                    if (p.length === 3) return p[2].length === 4 ? `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` : s;
+                  }
+                  return s;
+                };
+                const hDate = parseDate(document.hanXuLy);
+                if (document.trangThai === 'completed') {
+                  const completeEvent = document.history?.find(h => h.action === 'complete');
+                  if (completeEvent) {
+                    const cDate = new Date(completeEvent.timestamp).toLocaleDateString('en-CA');
+                    if (cDate > hDate) {
+                       currentStatusLabel += " (Quá hạn)";
+                       currentClasses = "bg-red-100 text-red-700";
+                    } else if (cDate < hDate) {
+                       currentStatusLabel += " (Trước hạn)";
+                       currentClasses = "bg-green-100 text-green-700";
+                    } else {
+                       currentStatusLabel += " (Đúng hạn)";
+                       currentClasses = "bg-green-100 text-green-700";
+                    }
+                  }
+                } else {
+                  const todayStr = new Date().toLocaleDateString('en-CA');
+                  if (todayStr > hDate) {
+                     currentStatusLabel += " (Quá hạn)";
+                     currentClasses = "bg-red-100 text-red-700";
+                  }
+                }
               }
 
               return (
@@ -693,11 +939,31 @@ const DocumentDetail: React.FC = () => {
           <Text className="font-bold text-base mb-3 border-b border-gray-100 pb-2">Thông tin xử lý</Text>
           
           {(() => {
-            const relevantHistory = document.history?.find(h => h.actorId === currentUser.id && ['submit', 'assign', 'forward_info', 'create'].includes(h.action));
-            const displayNoiDungDeXuat = relevantHistory?.noiDungDeXuat || document.noiDungDeXuat;
-            const displaySender = relevantHistory?.senderDepartmentId ? departments.find(d => d.id === relevantHistory.senderDepartmentId)?.name : (document.senderDepartmentId ? departments.find(d => d.id === document.senderDepartmentId)?.name : document.donViBanHanh);
-            const displayTargetIds = relevantHistory?.targetDepartmentIds || document.targetDepartmentIds;
-            const displayHanXuLy = currentDeadline;
+            const actingHistory = document.history?.find(h => h.actorId === currentUser.id && ['submit', 'assign', 'forward_info', 'create'].includes(h.action));
+            const targetedHistory = document.history?.find(h => 
+              (h.targetUserIds?.includes(currentUser.id) || h.assigneeId === currentUser.id || h.reporterIds?.includes(currentUser.id)) && 
+              ['assign', 'submit', 'forward_info'].includes(h.action)
+            );
+            // "Nội dung đề xuất" is a fixed property for the creator, but for recipients, it should show what was sent to them.
+            let displayNoiDungDeXuat = document.noiDungDeXuat;
+            if (currentUser.id !== document.creatorId && targetedHistory) {
+               displayNoiDungDeXuat = targetedHistory.noiDungDeXuat || targetedHistory.note || document.noiDungDeXuat;
+            }
+            
+            let displaySender = document.donViBanHanh;
+            if (actingHistory?.senderDepartmentId) {
+               displaySender = departments.find(d => d.id === actingHistory.senderDepartmentId)?.name || displaySender;
+            } else if (targetedHistory?.actorId) {
+               const actor = userList.find(u => u.id === targetedHistory.actorId);
+               if (actor) {
+                 displaySender = departments.find(d => d.id === actor.departmentId)?.name || displaySender;
+               }
+            } else if (document.senderDepartmentId) {
+               displaySender = departments.find(d => d.id === document.senderDepartmentId)?.name || displaySender;
+            }
+
+            const displayTargetIds = actingHistory?.targetDepartmentIds || document.targetDepartmentIds;
+            const displayHanXuLy = actingHistory?.hanXuLy || targetedHistory?.hanXuLy || document.hanXuLy;
 
             return (
               <>
@@ -776,21 +1042,41 @@ const DocumentDetail: React.FC = () => {
         const lastHistory = document.history?.[0];
         const isSenderOfLastAction = lastHistory?.actorId === currentUser.id;
         const isLastActionTransfer = lastHistory && ['assign', 'submit', 'forward_info', 'approve'].includes(lastHistory.action);
-        const isUnreadByOthers = !document.readBy || document.readBy.filter(uid => uid !== currentUser.id).length === 0;
+        const isTargetTarget = (uid: string) => {
+          if (!lastHistory) return false;
+          if (lastHistory.targetUserIds?.includes(uid)) return true;
+          const u = userList.find(user => user.id === uid);
+          if (u && lastHistory.targetDepartmentIds?.includes(u.departmentId)) return true;
+          return false;
+        };
+        const isUnreadByOthers = !document.readBy || document.readBy.filter(uid => uid !== currentUser.id && isTargetTarget(uid)).length === 0;
         
-        // Show recall if the user sent it. Disabled if someone else read it.
-        const showRecall = isSenderOfLastAction && isLastActionTransfer && document.trangThai !== 'completed' && document.trangThai !== 'deleted';
         const recallDisabled = !isUnreadByOthers;
+        // Show recall if the user sent it AND it is not disabled (someone else read it).
+        const showRecall = isSenderOfLastAction && isLastActionTransfer && document.trangThai !== 'completed' && document.trangThai !== 'deleted' && !recallDisabled;
         
         const hasActions = (document.trangThai !== 'completed' && document.trangThai !== 'deleted' && document.trangThai !== 'info');
         
         if (!hasActions && !showRecall) return null;
 
+        const branchStatus = currentUser ? getBranchStatus(document, currentUser.id) : 'completed';
+        const isExplicitReporter = document.reporterIds?.includes(currentUser.id) && !document.targetUserIds?.includes(currentUser.id) && document.assigneeId !== currentUser.id;
+
         return (
           <Box className="absolute bottom-0 left-0 right-0 p-4 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.05)] flex space-x-2 z-50">
-            {hasActions && !isInternal && renderExternalButtons()}
-            {hasActions && document.documentType === 'internal_cross' && renderInternalCrossButtons()}
-            {hasActions && document.documentType === 'internal_submit' && renderInternalSubmitButtons()}
+            {isExplicitReporter ? (
+              hasActions && branchStatus === 'processing' ? (
+                <Button className="flex-1 !bg-red-500 text-white" onClick={() => handleAction('complete', currentUser.role, undefined, undefined, 'Đã xem (Để biết)')}>
+                  Kết thúc
+                </Button>
+              ) : null
+            ) : (
+              <>
+                {hasActions && !isInternal && renderExternalButtons()}
+                {hasActions && document.documentType === 'internal_cross' && renderInternalCrossButtons()}
+                {hasActions && document.documentType === 'internal_submit' && renderInternalSubmitButtons()}
+              </>
+            )}
             
             {showRecall && (
                <Button 
@@ -818,8 +1104,25 @@ const DocumentDetail: React.FC = () => {
         <Box className="p-4"><Input.TextArea placeholder="Ý kiến chỉ đạo..." value={approveText} onChange={(e) => setApproveText(e.target.value)} /></Box>
       </Modal>
 
-      <Modal visible={submitResultModalVisible} title="Trình kết quả" onClose={() => setSubmitResultModalVisible(false)} actions={[{ text: "Hủy", close: true }, { text: "Xác nhận", highLight: true, onClick: () => handleAction('submit', submitTargetRole, 'pending', undefined, submitResultText) }]}>
-        <Box className="p-4"><Input.TextArea placeholder="Kết quả xử lý..." value={submitResultText} onChange={(e) => setSubmitResultText(e.target.value)} /></Box>
+      <Modal visible={submitResultModalVisible} title="Trình kết quả" onClose={() => setSubmitResultModalVisible(false)} actions={[{ text: "Hủy", close: true }, { text: "Xác nhận", highLight: true, onClick: () => {
+         const extraUpdates: any = {};
+         if (submitTargetUserIds.length > 0) {
+            extraUpdates.targetUserIds = submitTargetUserIds;
+            extraUpdates.isReturn = true;
+         } else {
+            extraUpdates.isReturn = false;
+         }
+         handleAction('submit', submitTargetRole, 'pending', extraUpdates, submitResultText, submitTargetUserIds.length === 0 ? currentUser.departmentId : undefined);
+      } }]}>
+        <Box className="p-4">
+          {submitTargetUserIds.length > 0 && (
+            <Box className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-100 flex items-center">
+              <span className="font-medium mr-2">Trả kết quả cho:</span>
+              <span className="font-bold">{submitTargetUserIds.map(id => userList.find(u => u.id === id)?.name).join(', ')}</span>
+            </Box>
+          )}
+          <Input.TextArea placeholder="Kết quả xử lý..." value={submitResultText} onChange={(e) => setSubmitResultText(e.target.value)} />
+        </Box>
       </Modal>
 
       <Modal 
@@ -914,6 +1217,29 @@ const DocumentDetail: React.FC = () => {
         </Box>
       </Modal>
 
+      <Modal 
+        visible={replyModalVisible} 
+        title="Trả lời người gửi" 
+        onClose={() => setReplyModalVisible(false)} 
+        actions={[
+          { text: "Hủy", close: true }, 
+          { 
+            text: "Gửi trả lời", 
+            highLight: true, 
+            onClick: handleReplySubmit
+          }
+        ]}
+      >
+        <Box className="p-4">
+          <Text className="mb-2 font-medium">Nội dung trả lời:</Text>
+          <Input.TextArea 
+            placeholder="Nhập nội dung trả lời..." 
+            value={replyNote} 
+            onChange={(e) => setReplyNote(e.target.value)} 
+          />
+        </Box>
+      </Modal>
+
       <Modal visible={publishInfoModalVisible} title="Lấy số & Gửi để biết" onClose={() => setPublishInfoModalVisible(false)} actions={[{ text: "Hủy", close: true }, { text: "Phát hành & Gửi", highLight: true, onClick: handlePublishInfoSubmit }]}>
         <Box className="p-4 space-y-4">
           <Input placeholder="Số VB phát hành..." value={publishDocNumber} onChange={(e) => setPublishDocNumber(e.target.value)} />
@@ -961,7 +1287,7 @@ const DocumentDetail: React.FC = () => {
                      checked={isDeptSelected}
                      onChange={(e) => {
                        const checked = e.target.checked;
-                       const userIds = deptUsers.filter(u => u.id !== document.creatorId && u.id !== currentUser.id).map(u => u.id);
+                       const userIds = deptUsers.map(u => u.id);
                        if (checked) {
                          setSelectedTargets(prev => Array.from(new Set([...prev, dept.id, ...userIds])));
                        } else {
@@ -984,15 +1310,13 @@ const DocumentDetail: React.FC = () => {
                        const isCreator = u.id === document.creatorId;
                        const isMe = u.id === currentUser.id;
                        const suffix = (isCreator && isMe) ? ' (Bạn - Người tạo)' : isCreator ? ' (Người tạo)' : isMe ? ' (Bạn)' : '';
-                       const isDisabled = isCreator || isMe;
                        
                        return (
                          <Box key={u.id}>
                            <Checkbox
                              label={`${u.name} - ${u.jobTitle || 'Chuyên viên'}${suffix}`}
                              value={u.id}
-                             checked={isDisabled || selectedTargets.includes(u.id)}
-                             disabled={isDisabled}
+                             checked={selectedTargets.includes(u.id)}
                              onChange={(e) => {
                                if (e.target.checked) setSelectedTargets(prev => [...prev, u.id]);
                                else setSelectedTargets(prev => prev.filter(id => id !== u.id));
@@ -1060,41 +1384,57 @@ const DocumentDetail: React.FC = () => {
         <Box className="p-4 space-y-4">
           <Box>
             <Text className="mb-2 font-medium">Chọn người xử lý:</Text>
-            <Box className="space-y-2 max-h-40 overflow-y-auto p-2 border border-gray-100 rounded bg-white">
-              <Checkbox 
-                label="Chọn tất cả"
-                value="all"
-                checked={assignCrossUserIds.length > 0 && assignCrossUserIds.length >= currentDeptMembers.filter(u => u.id !== document.creatorId && u.id !== currentUser.id).length}
-                onChange={(e) => {
-                  if (e.target.checked) setAssignCrossUserIds(currentDeptMembers.filter(u => u.id !== document.creatorId && u.id !== currentUser.id).map(u => u.id));
-                  else setAssignCrossUserIds([]);
-                }}
-              />
-              {currentDeptMembers.map(u => {
-                const isCreator = u.id === document.creatorId;
-                const isMe = u.id === currentUser.id;
-                const suffix = (isCreator && isMe) ? ' (Bạn - Người tạo)' : isCreator ? ' (Người tạo)' : isMe ? ' (Bạn)' : '';
-                const isDisabled = isCreator || isMe;
-                
-                return (
-                  <Checkbox 
-                    key={u.id}
-                    label={`${u.name} - ${u.jobTitle || 'Chuyên viên'}${suffix}`}
-                    value={u.id}
-                    disabled={isDisabled}
-                    checked={assignCrossUserIds.includes(u.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) setAssignCrossUserIds([...assignCrossUserIds, u.id]);
-                      else setAssignCrossUserIds(assignCrossUserIds.filter(id => id !== u.id));
-                    }}
-                  />
-                );
-              })}
+            <Box className="flex items-center space-x-3 mb-2">
+              <Box className="flex-shrink-0 pt-2">
+                <Checkbox 
+                  label="Tất cả"
+                  value="all"
+                  checked={assignCrossUserIds.length > 0 && assignCrossUserIds.length >= currentDeptMembers.filter(u => u.id !== document.creatorId && u.id !== currentUser.id).length}
+                  onChange={(e) => {
+                    if (e.target.checked) setAssignCrossUserIds(currentDeptMembers.filter(u => u.id !== document.creatorId && u.id !== currentUser.id).map(u => u.id));
+                    else setAssignCrossUserIds([]);
+                  }}
+                />
+              </Box>
+              <Box className="flex-1">
+                <Select
+                  multiple
+                  placeholder="Chọn cá nhân..."
+                  value={assignCrossUserIds}
+                  onChange={(val: any) => {
+                    setAssignCrossUserIds(Array.isArray(val) ? val : [val]);
+                  }}
+                  closeOnSelect={false}
+                >
+                  {currentDeptMembers.map(u => {
+                    const isCreator = u.id === document.creatorId;
+                    const isMe = u.id === currentUser.id;
+                    const suffix = (isCreator && isMe) ? ' (Bạn - Người tạo)' : isCreator ? ' (Người tạo)' : isMe ? ' (Bạn)' : '';
+                    const isDisabled = isCreator || isMe;
+                    
+                    return (
+                      <Select.Option 
+                        key={u.id}
+                        value={u.id}
+                        title={`${u.name} - ${u.jobTitle || 'Chuyên viên'}${suffix}`}
+                        disabled={isDisabled}
+                      />
+                    );
+                  })}
+                </Select>
+              </Box>
             </Box>
           </Box>
           <Box>
             <Text className="mb-2 font-medium">Nội dung chỉ đạo:</Text>
             <Input.TextArea placeholder="Nhập ý kiến..." value={assignCrossNote} onChange={(e) => setAssignCrossNote(e.target.value)} />
+          </Box>
+          <Box>
+            <Text className="font-medium text-gray-700 mb-2 text-sm">Hạn xử lý (nếu có):</Text>
+            <Input type={"date" as any} value={assignCrossDeadline} onChange={(e) => setAssignCrossDeadline(e.target.value)} />
+            {isDateOverdue(assignCrossDeadline, currentDeadline) && (
+              <Text className="text-red-500 text-xs mt-1">* Quá hạn so với yêu cầu ({currentDeadline})</Text>
+            )}
           </Box>
         </Box>
       </Modal>
