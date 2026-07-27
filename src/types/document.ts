@@ -1,6 +1,6 @@
 export type DocumentStatus = 'pending' | 'warning' | 'waiting' | 'overdue' | 'completed' | 'deleted' | 'info';
 
-export type UserRole = 'van_thu' | 'giam_doc' | 'truong_ban' | 'chuyen_vien';
+export type UserRole = 'van_thu' | 'giam_doc' | 'truong_ban' | 'chuyen_vien' | 'admin';
 export type DepartmentId = 'ban_giam_doc' | 'van_thu' | 'tchc' | 'khtc' | 'ptht' | 'htdv' | 'ksnb';
 
 export interface User {

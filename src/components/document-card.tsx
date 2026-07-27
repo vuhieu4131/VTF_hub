@@ -100,7 +100,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, currentTab
     h.actorId === currentUser.id
   ) || false) : false;
 
-  const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId) : 'processing';
+  const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId, currentUser.role) : 'processing';
   if (branchStatus === 'completed') {
     isAssigned = false;
   }

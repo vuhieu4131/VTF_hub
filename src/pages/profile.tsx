@@ -5,15 +5,16 @@ import { useNavigate } from "react-router-dom";
 import { userState, currentUserState } from "../state";
 import { UserRole } from "../types/document";
 import { departments } from "../constants/departments";
-import { signOut } from "firebase/auth";
+import { signOut, updatePassword } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { collection, getDocs, deleteDoc } from "firebase/firestore";
 
-const roleLabels: Record<UserRole, string> = {
+const roleLabels: Record<UserRole | 'admin', string> = {
   van_thu: "Văn thư",
   giam_doc: "Giám đốc",
   truong_ban: "Trưởng/Phó Ban",
   chuyen_vien: "Chuyên viên",
+  admin: "Quản trị hệ thống",
 };
 
 const ProfilePage: FC = () => {
@@ -82,6 +83,39 @@ const ProfilePage: FC = () => {
             </Box>
             <Icon icon="zi-chevron-right" className="text-gray-400" />
           </Box>
+          <Box 
+            className="flex items-center justify-between p-4 border-b border-gray-100 active:bg-gray-50"
+            onClick={async () => {
+                const newPass = window.prompt("Nhập mật khẩu mới (ít nhất 6 ký tự):");
+                if (newPass) {
+                   if (newPass.length < 6) {
+                      alert("Mật khẩu phải có ít nhất 6 ký tự!");
+                      return;
+                   }
+                   try {
+                     if (auth.currentUser) {
+                        await updatePassword(auth.currentUser, newPass);
+                        alert("Đổi mật khẩu thành công!");
+                     }
+                   } catch (e: any) {
+                     console.error(e);
+                     if (e.code === 'auth/requires-recent-login') {
+                        alert("Vì lý do bảo mật, bạn cần đăng nhập lại trước khi đổi mật khẩu!");
+                     } else {
+                        alert("Đổi mật khẩu thất bại: " + e.message);
+                     }
+                   }
+                }
+            }}
+          >
+            <Box className="flex items-center space-x-3">
+              <Box className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center">
+                <Icon icon="zi-lock" className="text-orange-500" size={18} />
+              </Box>
+              <Text className="text-gray-700 font-medium">Đổi mật khẩu</Text>
+            </Box>
+            <Icon icon="zi-chevron-right" className="text-gray-400" />
+          </Box>
           <Box className="flex items-center justify-between p-4 border-b border-gray-100 active:bg-gray-50">
             <Box className="flex items-center space-x-3">
               <Box className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
@@ -91,6 +125,21 @@ const ProfilePage: FC = () => {
             </Box>
             <Icon icon="zi-chevron-right" className="text-gray-400" />
           </Box>
+          
+          {currentUser.role === 'admin' && (
+             <Box 
+               className="flex items-center justify-between p-4 border-b border-gray-100 active:bg-gray-50"
+               onClick={() => navigate("/admin-settings")}
+             >
+               <Box className="flex items-center space-x-3">
+                 <Box className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center">
+                   <Icon icon="zi-setting" className="text-purple-500" size={18} />
+                 </Box>
+                 <Text className="text-purple-700 font-bold">Quản trị Phân quyền</Text>
+               </Box>
+               <Icon icon="zi-chevron-right" className="text-purple-400" />
+             </Box>
+          )}
         </Box>
         
         <Button fullWidth variant="secondary" className="!bg-red-50 !text-red-600 border border-red-200" onClick={handleLogout}>

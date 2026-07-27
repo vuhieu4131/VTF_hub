@@ -25,10 +25,22 @@ const TimelineItem = ({ h, getActionLabel, userList }: { h: any, getActionLabel:
   const [expanded, setExpanded] = useState(false);
 
   const targetDeptNames = h.targetDepartmentIds?.map((id: string) => departments.find(d => d.id === id)?.name || id) || [];
-  const targetUserNames = h.targetUserIds?.map((id: string) => userList.find(u => u.id === id)?.name || id) || [];
-  const reporterUserNames = h.reporterIds?.map((id: string) => userList.find(u => u.id === id)?.name + ' (Để biết)' || id + ' (Để biết)') || [];
   
-  const allTargets = [...targetDeptNames, ...targetUserNames, ...reporterUserNames];
+  // Combine all user IDs
+  const allUserIds = Array.from(new Set([
+    ...(h.targetUserIds || []),
+    ...(h.assigneeId ? [h.assigneeId] : []),
+    ...(h.reporterIds || [])
+  ]));
+
+  const targetUserNames = allUserIds.map((id: string) => {
+    const name = userList.find(u => u.id === id)?.name || id;
+    if (h.assigneeId === id) return `${name} (XL chính)`;
+    if (h.reporterIds?.includes(id)) return `${name} (Để biết)`;
+    return name;
+  });
+  
+  const allTargets = [...targetDeptNames, ...targetUserNames];
 
   return (
     <Box className="relative pl-6 border-l-2 border-blue-200">
@@ -121,7 +133,8 @@ const DocumentDetail: React.FC = () => {
   const [replyNote, setReplyNote] = useState('');
 
   const [publishInfoModalVisible, setPublishInfoModalVisible] = useState(false);
-  const [selectedMultiDepts, setSelectedMultiDepts] = useState<DepartmentId[]>([]);
+  const [publishSelectedTargets, setPublishSelectedTargets] = useState<string[]>([]);
+  const [publishExpandedDepts, setPublishExpandedDepts] = useState<string[]>([]);
 
   // New Modal for Trình Lãnh đạo Ban
   const [submitLeaderModalVisible, setSubmitLeaderModalVisible] = useState(false);
@@ -130,6 +143,16 @@ const DocumentDetail: React.FC = () => {
   const [submitTargetUserIds, setSubmitTargetUserIds] = useState<string[]>([]);
   const [selectedMainProcessorId, setSelectedMainProcessorId] = useState<string>('');
   const [selectedReporterIds, setSelectedReporterIds] = useState<string[]>([]);
+
+  // New Modal for Trình Giám đốc (Ban Giám đốc)
+  const [submitDirectorModalVisible, setSubmitDirectorModalVisible] = useState(false);
+  const [submitDirectorNote, setSubmitDirectorNote] = useState<string>('');
+  const [selectedMainDirectorId, setSelectedMainDirectorId] = useState<string>('');
+  const [selectedReporterDirectorIds, setSelectedReporterDirectorIds] = useState<string[]>([]);
+
+  // New Modal for Giám đốc ký duyệt & chuyển Văn thư
+  const [approveAndTransferModalVisible, setApproveAndTransferModalVisible] = useState(false);
+  const [approveAndTransferNote, setApproveAndTransferNote] = useState('');
 
   const [assignCrossModalVisible, setAssignCrossModalVisible] = useState(false);
   const [assignCrossUserIds, setAssignCrossUserIds] = useState<string[]>([]);
@@ -142,6 +165,10 @@ const DocumentDetail: React.FC = () => {
   const currentDeptLeaders = useMemo(() => {
     return userList.filter(u => u.departmentId === currentUser.departmentId && u.role === 'truong_ban');
   }, [userList, currentUser.departmentId]);
+
+  const boardOfDirectors = useMemo(() => {
+    return userList.filter(u => u.role === 'giam_doc');
+  }, [userList]);
 
   const currentDeptMembers = useMemo(() => {
     return userList.filter(u => u.departmentId === currentUser.departmentId && u.id !== currentUser.id);
@@ -454,13 +481,22 @@ const DocumentDetail: React.FC = () => {
 
     if (status === 'cv_a_created' && currentRole === 'chuyen_vien' && isSenderDept) {
       return (
-        <Button className="flex-1 !bg-blue-600 text-white" onClick={() => {
-          setSubmitLeaderStatus('ld_a_reviewing');
-          setSubmitLeaderNote('Trình LĐ Ban duyệt để gửi');
-          setSubmitLeaderModalVisible(true);
-        }}>
-          Trình LĐ Ban duyệt
-        </Button>
+        <>
+          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => {
+            setSubmitLeaderStatus('ld_a_reviewing');
+            setSubmitLeaderNote('Trình LĐ Ban duyệt để gửi');
+            setSubmitLeaderModalVisible(true);
+          }}>
+            Trình LĐ Ban duyệt
+          </Button>
+          <Button className="flex-1 !bg-red-500 text-white" onClick={() => {
+            if (window.confirm("Bạn có chắc chắn muốn kết thúc (hủy) văn bản này?")) {
+              handleAction('complete', 'chuyen_vien', 'completed', { internalStatus: 'completed' }, 'Kết thúc văn bản');
+            }
+          }}>
+            Kết thúc
+          </Button>
+        </>
       );
     }
     if (status === 'ld_a_reviewing' && currentRole === 'truong_ban' && isSenderDept) {
@@ -478,7 +514,7 @@ const DocumentDetail: React.FC = () => {
     
     const isExplicitTarget = document.targetUserIds?.includes(currentUser.id);
     const isActingAsChuyenVien = currentRole === 'chuyen_vien' || (currentRole === 'truong_ban' && isExplicitTarget && document.assigneeRole === 'chuyen_vien');
-    const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId) : 'completed';
+    const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId, currentUser.role) : 'completed';
 
     if (currentRole === 'truong_ban' && (branchStatus === 'processing' || branchStatus === 'waiting_reply')) {
       const history = document.history || [];
@@ -607,32 +643,63 @@ const DocumentDetail: React.FC = () => {
 
     if (status === 'cv_submit_created' && currentRole === 'chuyen_vien' && isSenderDept) {
       return (
-        <Button className="flex-1 !bg-blue-600 text-white" onClick={() => {
-          setSubmitLeaderStatus('ld_submit_reviewing');
-          setSubmitLeaderNote('Trình LĐ Ban ký duyệt');
-          setSubmitLeaderModalVisible(true);
-        }}>
-          Trình LĐ Ban
-        </Button>
+        <>
+          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => {
+            setSubmitLeaderStatus('ld_submit_reviewing');
+            setSubmitLeaderNote('Trình LĐ Ban ký duyệt');
+            setSubmitLeaderModalVisible(true);
+          }}>
+            Trình LĐ Ban
+          </Button>
+          <Button className="flex-1 !bg-red-500 text-white" onClick={() => {
+            if (window.confirm("Bạn có chắc chắn muốn kết thúc (hủy) văn bản này?")) {
+              handleAction('complete', 'chuyen_vien', 'completed', { internalStatus: 'completed' }, 'Kết thúc văn bản');
+            }
+          }}>
+            Kết thúc
+          </Button>
+        </>
       );
     }
     if (status === 'ld_submit_reviewing' && currentRole === 'truong_ban' && isSenderDept) {
       return (
-        <Button className="flex-1 !bg-blue-600 text-white" onClick={() => handleAction('submit', 'giam_doc', 'pending', { internalStatus: 'gd_submit_reviewing' }, 'Trình Giám đốc ký phát hành')}>
-          Trình Giám đốc
-        </Button>
+        <>
+          <Button variant="secondary" className="flex-1 text-red-600 border border-red-200" onClick={() => setRejectModalVisible(true)}>
+            Trả lại
+          </Button>
+          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => setSubmitDirectorModalVisible(true)}>
+            Trình Lãnh đạo
+          </Button>
+        </>
       );
     }
     if (status === 'gd_submit_reviewing' && currentRole === 'giam_doc') {
       return (
-        <Button className="flex-1 !bg-blue-600 text-white" onClick={() => handleAction('approve', 'van_thu', 'pending', { internalStatus: 'vt_submit_publishing' }, 'Ký duyệt, giao Văn thư phát hành')}>
-          Ký duyệt & Chuyển Văn thư
-        </Button>
+        <>
+          <Button variant="secondary" className="flex-1 text-red-600 border border-red-200" onClick={() => setRejectModalVisible(true)}>
+            Trả lại
+          </Button>
+          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => {
+            setApproveAndTransferNote('Ký duyệt, giao Văn thư phát hành');
+            setApproveAndTransferModalVisible(true);
+          }}>
+            Ký duyệt & Chuyển Văn thư
+          </Button>
+        </>
       );
     }
     if (status === 'vt_submit_publishing' && currentRole === 'van_thu') {
       return (
-        <Button className="flex-1 !bg-green-600 text-white" onClick={() => setPublishInfoModalVisible(true)}>
+        <Button className="flex-1 !bg-green-600 text-white" onClick={() => {
+          const targets: string[] = [];
+          if (document.creatorId) targets.push(document.creatorId);
+          setPublishSelectedTargets(targets);
+          const creator = userList.find(u => u.id === document.creatorId);
+          if (creator && creator.departmentId) {
+            setPublishExpandedDepts([creator.departmentId]);
+          }
+          setPublishInfoModalVisible(true);
+        }}>
           Lấy số & Gửi để biết
         </Button>
       );
@@ -723,19 +790,33 @@ const DocumentDetail: React.FC = () => {
     handleAction('submit', receivedEvent.actorRole || 'truong_ban', 'pending', { 
       targetUserIds: [targetUserId],
       noiDungDeXuat: replyNote,
-      isReturn: true
+      isReturn: true,
+      internalStatus: receivedEvent.previousState?.internalStatus || document.internalStatus
     }, replyNote);
     
     setReplyModalVisible(false);
   };
 
   const handlePublishInfoSubmit = () => {
-    handleAction('forward_info', undefined, 'info', { 
+    const targetDeptIds = departments.filter(d => publishSelectedTargets.includes(d.id)).map(d => d.id);
+    const targetUserIds = publishSelectedTargets.filter(id => !(targetDeptIds as string[]).includes(id));
+    if (document.creatorId && !targetUserIds.includes(document.creatorId)) {
+      targetUserIds.push(document.creatorId);
+    }
+
+    const usersInDepts = userList.filter(u => targetDeptIds.includes(u.departmentId)).map(u => u.id);
+    const newReporterIds = Array.from(new Set([...(document.reporterIds || []), ...targetUserIds, ...usersInDepts]));
+
+    handleAction('complete', undefined, 'completed', { 
       internalStatus: 'completed', 
       soVanBanPhatHanh: publishDocNumber, 
       ngayPhatHanh: publishDate,
-      targetDepartmentIds: selectedMultiDepts 
-    }, `Phát hành VB số ${publishDocNumber} và Gửi cho các Ban: ${selectedMultiDepts.length > 0 ? selectedMultiDepts.join(', ') : 'Tất cả'}`);
+      targetDepartmentIds: targetDeptIds.length > 0 ? targetDeptIds : undefined,
+      targetUserIds: targetUserIds.length > 0 ? targetUserIds : undefined,
+      reporterIds: newReporterIds
+    }, `Phát hành VB số ${publishDocNumber} và Gửi cho các đối tượng đã chọn`);
+    
+    setPublishInfoModalVisible(false);
   };
 
   const handleSubmitLeaderSubmit = async () => {
@@ -743,19 +824,46 @@ const DocumentDetail: React.FC = () => {
       alert("Vui lòng chọn 1 Lãnh đạo xử lý chính!");
       return;
     }
-    const processor = userList.find(u => u.id === selectedMainProcessorId);
-    const reporterNames = selectedReporterIds.map(id => userList.find(u => u.id === id)?.name).join(', ');
-    const reporterPart = reporterNames ? `; Để biết: ${reporterNames}` : '';
-    const finalNote = `Xử lý chính: "${processor?.name}"${reporterPart} và Nội dung: ${submitLeaderNote || 'Không có'}`;
+    const finalNote = submitLeaderNote || 'Trình Lãnh đạo Ban';
 
     await handleAction('submit', 'truong_ban', 'pending', { 
       internalStatus: submitLeaderStatus,
+      targetUserIds: [selectedMainProcessorId, ...selectedReporterIds],
       assigneeId: selectedMainProcessorId,
       reporterIds: selectedReporterIds,
       noiDungDeXuat: submitLeaderNote
     }, finalNote);
     
     navigate('/', { replace: true });
+  };
+
+  const handleSubmitDirectorSubmit = async () => {
+    if (!selectedMainDirectorId) {
+      alert("Vui lòng chọn 1 Lãnh đạo xử lý chính!");
+      return;
+    }
+    const finalNote = submitDirectorNote || 'Trình Ban Giám đốc';
+
+    await handleAction('submit', 'giam_doc', 'pending', { 
+      internalStatus: 'gd_submit_reviewing',
+      targetUserIds: [selectedMainDirectorId, ...selectedReporterDirectorIds],
+      assigneeId: selectedMainDirectorId,
+      reporterIds: selectedReporterDirectorIds,
+      noiDungDeXuat: submitDirectorNote
+    }, finalNote);
+    
+    navigate('/', { replace: true });
+  };
+
+  const handleApproveAndTransferSubmit = async () => {
+    const finalNote = approveAndTransferNote || 'Ký duyệt, giao Văn thư phát hành';
+    
+    await handleAction('approve', 'van_thu', 'pending', { 
+      internalStatus: 'vt_submit_publishing',
+      noiDungDeXuat: approveAndTransferNote
+    }, finalNote);
+    
+    setApproveAndTransferModalVisible(false);
   };
 
   const handleAssignCrossSubmit = () => {
@@ -836,7 +944,7 @@ const DocumentDetail: React.FC = () => {
           <Box className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-100 shadow-sm">
             <Text className="font-semibold text-gray-800 mb-2">Trạng thái nhánh</Text>
             {(() => {
-              const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId) : 'completed';
+              const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId, currentUser.role) : 'completed';
               let branchLabel = 'Đang xử lý';
               let branchClass = 'text-orange-600';
               if (branchStatus === 'completed') {
@@ -923,7 +1031,7 @@ const DocumentDetail: React.FC = () => {
                 h.actorId === currentUser.id
               ) || false;
               
-              const branchStatus = getBranchStatus(document, currentUser.id, currentUser.departmentId);
+              const branchStatus = getBranchStatus(document, currentUser.id, currentUser.departmentId, currentUser.role);
               if (branchStatus === 'completed') {
                 isAssigned = false;
               }
@@ -1037,10 +1145,10 @@ const DocumentDetail: React.FC = () => {
                 )}
 
                 <Box className="flex justify-between items-start mb-3">
-                  <Text className="text-gray-500 mt-1">Loại văn bản:</Text>
+                  <Text className="text-gray-500 mt-1">Loại luồng công việc:</Text>
                   <Text className="text-gray-800 font-medium">
-                    {document.documentType === 'internal_cross' ? 'Nội bộ (Ngang cấp)' :
-                     document.documentType === 'internal_submit' ? 'Nội bộ (Trình ký)' : 'Văn bản đến'}
+                    {document.documentType === 'internal_cross' ? 'Luồng 1: Xử lý ngang cấp (Gửi Ban khác)' :
+                     document.documentType === 'internal_submit' ? 'Luồng 2: Trình Giám đốc ký phát hành' : 'Văn bản đến (Ngoại bộ)'}
                   </Text>
                 </Box>
                 <Box className="flex justify-between items-start mb-3">
@@ -1115,17 +1223,18 @@ const DocumentDetail: React.FC = () => {
         // Show recall if the user sent it AND it is not disabled (someone else read it).
         const showRecall = isSenderOfLastAction && isLastActionTransfer && document.trangThai !== 'completed' && document.trangThai !== 'deleted' && !recallDisabled;
         
+        const isExplicitReporter = document.reporterIds?.includes(currentUser.id) && (document.assigneeId !== currentUser.id || document.trangThai === 'completed');
+        
         const hasActions = (document.trangThai !== 'completed' && document.trangThai !== 'deleted' && document.trangThai !== 'info');
         
-        if (!hasActions && !showRecall) return null;
+        if (!hasActions && !showRecall && !isExplicitReporter) return null;
 
-        const branchStatus = currentUser ? getBranchStatus(document, currentUser.id) : 'completed';
-        const isExplicitReporter = document.reporterIds?.includes(currentUser.id) && !document.targetUserIds?.includes(currentUser.id) && document.assigneeId !== currentUser.id;
+        const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId, currentUser.role) : 'completed';
 
         return (
           <Box className="absolute bottom-0 left-0 right-0 p-4 bg-white shadow-[0_-4px_10px_rgba(0,0,0,0.05)] flex space-x-2 z-50">
             {isExplicitReporter ? (
-              hasActions && branchStatus === 'processing' ? (
+              branchStatus === 'processing' ? (
                 <Button className="flex-1 !bg-red-500 text-white" onClick={() => handleAction('complete', currentUser.role, undefined, undefined, 'Đã xem (Để biết)')}>
                   Kết thúc
                 </Button>
@@ -1154,8 +1263,27 @@ const DocumentDetail: React.FC = () => {
 
       {/* Modals from before */}
       <Modal visible={rejectModalVisible} title="Trả lại văn bản" onClose={() => setRejectModalVisible(false)} actions={[{ text: "Hủy", close: true }, { text: "Xác nhận", highLight: true, onClick: () => {
-         const previousRole = document.history?.find(h => h.actorRole !== currentRole)?.actorRole || 'van_thu';
-         handleAction('reject', previousRole, 'warning', undefined, rejectReason);
+         const receivedEvent = document.history?.find(h => 
+           (!h.isReturn) && (
+             h.targetUserIds?.includes(currentUser.id) || 
+             h.assigneeId === currentUser.id || 
+             h.reporterIds?.includes(currentUser.id) || 
+             h.targetDepartmentIds?.some(id => id.toLowerCase() === currentUser.departmentId.toLowerCase())
+           )
+         );
+         
+         if (receivedEvent) {
+             const targetUserId = receivedEvent.actorId;
+             handleAction('reject', receivedEvent.actorRole || 'chuyen_vien', 'warning', {
+                 targetUserIds: [targetUserId],
+                 isReturn: true,
+                 internalStatus: receivedEvent.previousState?.internalStatus || document.internalStatus
+             }, rejectReason);
+         } else {
+             const previousRole = document.history?.find(h => h.actorRole !== currentRole)?.actorRole || 'van_thu';
+             handleAction('reject', previousRole, 'warning', { isReturn: true }, rejectReason);
+         }
+         setRejectModalVisible(false);
       }}]}>
         <Box className="p-4"><Input.TextArea placeholder="Nhập lý do..." value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} /></Box>
       </Modal>
@@ -1307,21 +1435,63 @@ const DocumentDetail: React.FC = () => {
           
           <Box>
             <Text className="mb-2 font-medium">Gửi đến các Ban (Để biết):</Text>
-            <Box className="space-y-2 max-h-40 overflow-y-auto">
-              {departments.map(d => (
-                <Checkbox 
-                  key={d.id} 
-                  value={d.id}
-                  label={d.name} 
-                  checked={selectedMultiDepts.includes(d.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) setSelectedMultiDepts([...selectedMultiDepts, d.id]);
-                    else setSelectedMultiDepts(selectedMultiDepts.filter(id => id !== d.id));
-                  }}
-                />
-              ))}
+            <Box className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
+              {departments.map(dept => {
+                 const deptUsers = userList.filter(u => u.departmentId === dept.id);
+                 const isExpanded = publishExpandedDepts.includes(dept.id);
+                 const isDeptSelected = publishSelectedTargets.includes(dept.id);
+                 
+                 return (
+                   <Box key={dept.id} className="border-b border-gray-100 pb-3">
+                     <Box className="flex justify-between items-center">
+                       <Checkbox 
+                         label={dept.name}
+                         value={dept.id}
+                         checked={isDeptSelected}
+                         onChange={(e) => {
+                           const checked = e.target.checked;
+                           const userIds = deptUsers.map(u => u.id);
+                           if (checked) {
+                             setPublishSelectedTargets(prev => Array.from(new Set([...prev, dept.id, ...userIds])));
+                           } else {
+                             setPublishSelectedTargets(prev => prev.filter(id => id !== dept.id && (!userIds.includes(id) || id === document.creatorId)));
+                           }
+                         }}
+                       />
+                       {deptUsers.length > 0 && (
+                         <Box 
+                           onClick={() => setPublishExpandedDepts(prev => prev.includes(dept.id) ? prev.filter(id => id !== dept.id) : [...prev, dept.id])} 
+                           className="p-2 bg-gray-50 rounded-full"
+                         >
+                           <Text className="text-xs text-gray-500">{isExpanded ? '▲' : '▼'}</Text>
+                         </Box>
+                       )}
+                     </Box>
+                     {isExpanded && (
+                       <Box className="pl-6 mt-3 space-y-3 border-l-2 border-gray-100 ml-2">
+                         {deptUsers.map(u => {
+                           return (
+                             <Box key={u.id}>
+                               <Checkbox
+                                 label={`${u.name} - ${u.jobTitle || 'Chuyên viên'}${u.id === document.creatorId ? ' (Người tạo)' : ''}`}
+                                 value={u.id}
+                                 checked={publishSelectedTargets.includes(u.id) || u.id === document.creatorId}
+                                 disabled={u.id === document.creatorId}
+                                 onChange={(e) => {
+                                   if (e.target.checked) setPublishSelectedTargets(prev => [...prev, u.id]);
+                                   else setPublishSelectedTargets(prev => prev.filter(id => id !== u.id));
+                                 }}
+                               />
+                             </Box>
+                           );
+                         })}
+                       </Box>
+                     )}
+                   </Box>
+                 );
+              })}
             </Box>
-            <Text className="text-xs text-gray-500 mt-2 italic">* Nếu không chọn ban nào, mặc định gửi cho tất cả.</Text>
+            <Text className="text-xs text-gray-500 mt-4 italic">* Nếu không chọn gì, hệ thống mặc định gửi cho tất cả.</Text>
           </Box>
         </Box>
       </Modal>
@@ -1435,6 +1605,67 @@ const DocumentDetail: React.FC = () => {
               placeholder="Nhập nội dung trình Lãnh đạo..." 
               value={submitLeaderNote} 
               onChange={(e) => setSubmitLeaderNote(e.target.value)} 
+            />
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Select Director Modal */}
+      <Modal visible={submitDirectorModalVisible} title="Trình Ban Giám đốc" onClose={() => setSubmitDirectorModalVisible(false)} actions={[{ text: "Hủy", close: true }, { text: "Xác nhận trình", highLight: true, onClick: handleSubmitDirectorSubmit }]}>
+        <Box className="p-4 space-y-4">
+          <Text className="font-medium text-gray-700">Chọn Lãnh đạo xử lý chính và báo cáo:</Text>
+          <Box className="space-y-3 mt-2">
+            {boardOfDirectors.map(director => (
+              <Box key={director.id} className="flex items-center justify-between p-2 border border-gray-100 rounded-lg bg-gray-50">
+                <Text className="font-medium flex-1">{director.name}</Text>
+                <Box className="flex items-center space-x-4">
+                  <label className="flex items-center space-x-1 text-sm text-blue-600">
+                    <input 
+                      type="radio" 
+                      name="main_director" 
+                      checked={selectedMainDirectorId === director.id}
+                      onChange={() => setSelectedMainDirectorId(director.id)}
+                      className="w-4 h-4"
+                    />
+                    <span>Xử lý</span>
+                  </label>
+                  <label className="flex items-center space-x-1 text-sm text-gray-600">
+                    <input 
+                      type="checkbox"
+                      checked={selectedReporterDirectorIds.includes(director.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedReporterDirectorIds([...selectedReporterDirectorIds, director.id]);
+                        else setSelectedReporterDirectorIds(selectedReporterDirectorIds.filter(id => id !== director.id));
+                      }}
+                      disabled={selectedMainDirectorId === director.id}
+                      className="w-4 h-4"
+                    />
+                    <span>Để biết</span>
+                  </label>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+          <Box className="mt-4">
+            <Text className="font-medium text-gray-700 mb-2">Nội dung trình:</Text>
+            <Input.TextArea 
+              placeholder="Nhập nội dung trình Giám đốc..." 
+              value={submitDirectorNote} 
+              onChange={(e) => setSubmitDirectorNote(e.target.value)} 
+            />
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Ký duyệt & Chuyển Văn thư Modal */}
+      <Modal visible={approveAndTransferModalVisible} title="Ký duyệt & Chuyển Văn thư" onClose={() => setApproveAndTransferModalVisible(false)} actions={[{ text: "Hủy", close: true }, { text: "Xác nhận chuyển", highLight: true, onClick: handleApproveAndTransferSubmit }]}>
+        <Box className="p-4 space-y-4">
+          <Box>
+            <Text className="font-medium text-gray-700 mb-2">Nội dung chuyển:</Text>
+            <Input.TextArea 
+              placeholder="Nhập ghi chú hoặc ý kiến chỉ đạo (nếu có)..." 
+              value={approveAndTransferNote} 
+              onChange={(e) => setApproveAndTransferNote(e.target.value)} 
             />
           </Box>
         </Box>

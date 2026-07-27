@@ -62,10 +62,7 @@ const CreateDocument: React.FC = () => {
       return;
     }
     
-    const processor = userList.find(u => u.id === selectedMainProcessorId);
-    const reporterNames = selectedReporterIds.map(id => userList.find(u => u.id === id)?.name).join(', ');
-    const reporterPart = reporterNames ? `; Để biết: ${reporterNames}` : '';
-    const finalNote = `Xử lý chính: "${processor?.name}"${reporterPart} và Nội dung: ${submitLeaderNote || 'Không có'}`;
+    const finalNote = submitLeaderNote || 'Trình Lãnh đạo Ban';
 
     const newDocId = `doc-${Date.now()}`;
     
@@ -104,7 +101,7 @@ const CreateDocument: React.FC = () => {
           actorName: currentUser.name,
           actorRole: currentUser.role,
           targetRole: 'truong_ban',
-          targetUserIds: [selectedMainProcessorId],
+          targetUserIds: [selectedMainProcessorId, ...selectedReporterIds],
           reporterIds: selectedReporterIds,
           timestamp: new Date().toISOString(),
           note: finalNote,

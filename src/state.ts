@@ -140,3 +140,15 @@ export const filteredDocumentListState = selector<Document[]>({
     });
   }
 });
+
+export interface UserStatisticsPermission {
+  viewType: 'all' | 'departments' | 'users';
+  allowedDepartmentIds?: string[];
+  allowedUserIds?: string[];
+}
+
+export const statisticsPermissionsState = atom<Record<string, UserStatisticsPermission>>({
+  key: "statisticsPermissions",
+  default: {},
+});
+

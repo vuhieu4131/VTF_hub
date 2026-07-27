@@ -9,6 +9,7 @@ import DocumentDetailPage from "pages/document-detail";
 import ProfilePage from "pages/profile";
 import LoginPage from "pages/login";
 import RegisterPage from "pages/register";
+import AdminSettingsPage from "pages/admin-settings";
 import { getSystemInfo } from "zmp-sdk";
 import { ScrollRestoration } from "./scroll-restoration";
 import { useRecoilValue } from "recoil";
@@ -44,6 +45,7 @@ export const Layout: FC = () => {
               <Route path="/create" element={<CreatePage />}></Route>
               <Route path="/document-detail" element={<DocumentDetailPage />}></Route>
               <Route path="/profile" element={<ProfilePage />}></Route>
+              <Route path="/admin-settings" element={<AdminSettingsPage />}></Route>
             </>
           ) : (
             <Route path="*" element={<LoginPage />}></Route>

@@ -1,13 +1,19 @@
 import { Document, DocumentHistory } from '../types/document';
 
-export function isUserBranchCompleted(document: Document, userId: string, departmentId?: string): 'processing' | 'completed' | 'waiting_reply' {
+export function isUserBranchCompleted(document: Document, userId: string, departmentId?: string, userRole?: string): 'processing' | 'completed' | 'waiting_reply' {
   const history = document.history || [];
   
   // 1. Find when this user was last assigned/received the document
   // History is sorted newest first.
   const targetDeptId = departmentId || userId;
   const receivedEventIndex = history.findIndex(h => 
-    (!h.isReturn) && (h.targetUserIds?.includes(userId) || h.assigneeId === userId || h.reporterIds?.includes(userId) || h.targetDepartmentIds?.some(id => id.toLowerCase() === targetDeptId.toLowerCase()))
+    (!h.isReturn) && (
+      h.targetUserIds?.includes(userId) || 
+      h.assigneeId === userId || 
+      h.reporterIds?.includes(userId) || 
+      h.targetDepartmentIds?.some(id => id.toLowerCase() === targetDeptId.toLowerCase()) ||
+      (userRole && h.targetRole === userRole)
+    )
   );
   
   const isCreator = document.creatorId === userId;
@@ -104,7 +110,8 @@ export function isUserBranchCompleted(document: Document, userId: string, depart
   return 'processing';
 }
 
-export function getBranchStatus(document: Document, userId: string, departmentId?: string) {
-    if (document.trangThai === 'completed') return 'completed';
-    return isUserBranchCompleted(document, userId, departmentId);
+export function getBranchStatus(document: Document, userId: string, departmentId?: string, userRole?: string) {
+    const isExplicitReporter = document.reporterIds?.includes(userId) && (document.assigneeId !== userId || document.trangThai === 'completed');
+    if (document.trangThai === 'completed' && !isExplicitReporter) return 'completed';
+    return isUserBranchCompleted(document, userId, departmentId, userRole);
 }
