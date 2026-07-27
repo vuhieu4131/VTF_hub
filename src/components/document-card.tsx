@@ -107,60 +107,74 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, currentTab
 
   const isProcessed = hasParticipated && !isAssigned;
 
-  let currentStatusBg = isRejected && document.trangThai === 'warning' ? "bg-red-100" : statusBg[document.trangThai];
-  let currentStatusColor = isRejected && document.trangThai === 'warning' ? "text-red-600" : statusColors[document.trangThai];
-  let currentStatusLabel = isRejected && document.trangThai === 'warning' ? "Bị trả lại" : statusLabels[document.trangThai];
+  let currentStatusBg = "bg-orange-100";
+  let currentStatusColor = "text-orange-600";
+  let currentStatusLabel = "Đang xử lý";
 
-  if (isProcessed) {
-    if (document.creatorId === currentUser.id && document.trangThai !== 'completed') {
-      currentStatusBg = "bg-purple-100";
-      currentStatusColor = "text-purple-600";
-      currentStatusLabel = "Hệ thống đang xử lý";
-    } else if (branchStatus === 'completed' && document.trangThai !== 'completed') {
-      currentStatusBg = "bg-green-100";
-      currentStatusColor = "text-green-600";
-      currentStatusLabel = "Hoàn thành";
-    } else if (document.trangThai !== 'completed') {
-      currentStatusBg = "bg-purple-100";
-      currentStatusColor = "text-purple-600";
-      currentStatusLabel = "Hệ thống đang xử lý";
-    }
-  }
-
-  if (document.hanXuLy) {
-    const parseDate = (s: string) => {
-      if (s.includes('/')) {
-        const p = s.split('/');
-        if (p.length === 3) return p[2].length === 4 ? `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` : s;
-      }
-      return s;
-    };
-    const hDate = parseDate(document.hanXuLy);
-    if (document.trangThai === 'completed') {
-      const completeEvent = document.history?.find(h => h.action === 'complete');
-      if (completeEvent) {
-        const cDate = new Date(completeEvent.timestamp).toLocaleDateString('en-CA');
-        if (cDate > hDate) {
-           currentStatusLabel += " (Quá hạn)";
-           currentStatusBg = "bg-red-100";
-           currentStatusColor = "text-red-700";
-        } else if (cDate < hDate) {
-           currentStatusLabel += " (Trước hạn)";
-           currentStatusBg = "bg-green-100";
-           currentStatusColor = "text-green-700";
+  if (isRejected && document.trangThai === 'warning') {
+    currentStatusBg = "bg-red-100";
+    currentStatusColor = "text-red-600";
+    currentStatusLabel = "Bị trả lại";
+  } else if (currentUser && hasParticipated) {
+    if (branchStatus === 'completed') {
+      currentStatusLabel = 'Đã hoàn thành';
+      currentStatusBg = 'bg-green-100';
+      currentStatusColor = 'text-green-600';
+      
+      const targetedHistory = document.history?.find(h => 
+        (h.targetUserIds?.includes(currentUser.id) || h.assigneeId === currentUser.id || h.reporterIds?.includes(currentUser.id)) && 
+        ['assign', 'submit', 'forward_info'].includes(h.action)
+      );
+      const personalDeadline = targetedHistory?.hanXuLy || document.hanXuLy;
+      const completionEvent = document.history?.find(h => 
+         h.actorId === currentUser.id && 
+         (['approve', 'reject', 'complete'].includes(h.action) || (h.action === 'submit' && h.isReturn))
+      );
+      
+      if (personalDeadline && completionEvent) {
+        const deadlineDate = new Date(personalDeadline).setHours(23, 59, 59, 999);
+        const completionDate = new Date(completionEvent.timestamp).getTime();
+        
+        if (completionDate > deadlineDate) {
+          currentStatusLabel += " (Quá hạn)";
+          currentStatusBg = "bg-red-100";
+          currentStatusColor = "text-red-600";
+        } else if (completionDate < new Date(personalDeadline).setHours(0, 0, 0, 0)) {
+          currentStatusLabel += " (Trước hạn)";
         } else {
-           currentStatusLabel += " (Đúng hạn)";
-           currentStatusBg = "bg-green-100";
-           currentStatusColor = "text-green-700";
+          currentStatusLabel += " (Đúng hạn)";
         }
       }
+    } else if (branchStatus === 'waiting_reply') {
+      currentStatusLabel = 'Đã hoàn thành (Chờ trả lời)';
+      currentStatusBg = 'bg-blue-100';
+      currentStatusColor = 'text-blue-600';
     } else {
-      const todayStr = new Date().toLocaleDateString('en-CA');
-      if (todayStr > hDate) {
-         currentStatusLabel += " (Quá hạn)";
-         currentStatusBg = "bg-red-100";
-         currentStatusColor = "text-red-700";
+      currentStatusLabel = isAssigned ? 'Chờ xử lý' : 'Đang xử lý';
+      currentStatusBg = 'bg-orange-100';
+      currentStatusColor = 'text-orange-600';
+      
+      // If it's pending and overdue for them personally
+      const targetedHistory = document.history?.find(h => 
+        (h.targetUserIds?.includes(currentUser.id) || h.assigneeId === currentUser.id || h.reporterIds?.includes(currentUser.id)) && 
+        ['assign', 'submit', 'forward_info'].includes(h.action)
+      );
+      const personalDeadline = targetedHistory?.hanXuLy || document.hanXuLy;
+      if (personalDeadline) {
+        const deadlineDate = new Date(personalDeadline).setHours(23, 59, 59, 999);
+        if (Date.now() > deadlineDate) {
+          currentStatusLabel += " (Quá hạn)";
+          currentStatusBg = "bg-red-100";
+          currentStatusColor = "text-red-600";
+        }
       }
+    }
+  } else {
+    // For observers who haven't participated, show global status
+    if (document.trangThai === 'completed') {
+      currentStatusBg = "bg-green-100";
+      currentStatusColor = "text-green-600";
+      currentStatusLabel = "Hoàn tất luân chuyển";
     }
   }
 

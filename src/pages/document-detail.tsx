@@ -414,7 +414,30 @@ const DocumentDetail: React.FC = () => {
         );
       case 'chuyen_vien':
         return (
-          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => { setSubmitTargetRole('truong_ban'); setSubmitResultModalVisible(true); }}>
+          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => { 
+            const history = document.history || [];
+            const latestTerminalIndex = history.findIndex((h: any) => 
+               h.actorId === currentUser.id && 
+               (['complete', 'approve', 'reject'].includes(h.action) || (h.action === 'submit' && h.isReturn))
+            );
+            
+            const delegators = new Set<string>();
+            for (let i = 0; i < history.length; i++) {
+               if (latestTerminalIndex !== -1 && i >= latestTerminalIndex) break;
+               const h = history[i];
+               if (!h.isReturn && (
+                   h.targetUserIds?.includes(currentUser.id) || 
+                   h.assigneeId === currentUser.id || 
+                   h.targetDepartmentIds?.some((id: string) => id.toLowerCase() === currentUser.departmentId.toLowerCase())
+               )) {
+                   if (h.actorId) delegators.add(h.actorId);
+               }
+            }
+            
+            setSubmitTargetUserIds(Array.from(delegators));
+            setSubmitTargetRole('truong_ban'); 
+            setSubmitResultModalVisible(true); 
+          }}>
             Trình kết quả
           </Button>
         );
@@ -531,19 +554,26 @@ const DocumentDetail: React.FC = () => {
           )}
           {!isCreator && branchStatus === 'processing' && (
             <Button className="flex-1 !bg-blue-600 text-white" onClick={() => { 
-              const receivedEvent = document.history?.find(h => 
-                (!h.isReturn) && (
-                  h.targetUserIds?.includes(currentUser.id) || 
-                  h.assigneeId === currentUser.id || 
-                  h.targetDepartmentIds?.some(id => id.toLowerCase() === currentUser.departmentId.toLowerCase())
-                )
+              const history = document.history || [];
+              const latestTerminalIndex = history.findIndex((h: any) => 
+                 h.actorId === currentUser.id && 
+                 (['complete', 'approve', 'reject'].includes(h.action) || (h.action === 'submit' && h.isReturn))
               );
               
-              if (receivedEvent && receivedEvent.actorId) {
-                setSubmitTargetUserIds([receivedEvent.actorId]);
-              } else {
-                setSubmitTargetUserIds([]);
+              const delegators = new Set<string>();
+              for (let i = 0; i < history.length; i++) {
+                 if (latestTerminalIndex !== -1 && i >= latestTerminalIndex) break;
+                 const h = history[i];
+                 if (!h.isReturn && (
+                     h.targetUserIds?.includes(currentUser.id) || 
+                     h.assigneeId === currentUser.id || 
+                     h.targetDepartmentIds?.some((id: string) => id.toLowerCase() === currentUser.departmentId.toLowerCase())
+                 )) {
+                     if (h.actorId) delegators.add(h.actorId);
+                 }
               }
+              
+              setSubmitTargetUserIds(Array.from(delegators));
               setSubmitTargetRole('truong_ban'); 
               setSubmitResultModalVisible(true); 
             }}>
@@ -653,17 +683,22 @@ const DocumentDetail: React.FC = () => {
       alert("Vui lòng chọn ít nhất 1 Ban/Cá nhân nhận!");
       return;
     }
-    const targetDeptIds = selectedTargets.filter(id => departments.some(d => d.id === id));
+    
+    // Lọc ra các cá nhân được chọn. Không truyền targetDepartmentIds để tránh việc chờ một "phòng ban" hoàn thành nhánh.
     const targetUserIds = selectedTargets.filter(id => userList.some(u => u.id === id));
+    
+    if (targetUserIds.length === 0) {
+       alert("Các Ban được chọn hiện chưa có người dùng nào!");
+       return;
+    }
     
     handleAction('submit', 'truong_ban', 'pending', { 
       internalStatus: 'ld_b_reviewing', 
-      targetDepartmentIds: targetDeptIds,
       targetUserIds: targetUserIds,
       noiDungDeXuat: selectDeptNote || `Gửi văn bản liên thông`,
       senderDepartmentId: currentUser.departmentId,
       ...(selectDeptDeadline ? { hanXuLy: selectDeptDeadline } : {})
-    }, selectDeptNote || `Gửi văn bản liên thông`, targetDeptIds[0]);
+    }, selectDeptNote || `Gửi văn bản liên thông`);
   };
 
   const handleReplySubmit = () => {
@@ -807,6 +842,31 @@ const DocumentDetail: React.FC = () => {
               if (branchStatus === 'completed') {
                   branchLabel = 'Đã hoàn thành';
                   branchClass = 'text-green-600';
+                  
+                  // Calculate personal deadline suffix
+                  const targetedHistory = document.history?.find(h => 
+                    (h.targetUserIds?.includes(currentUser.id) || h.assigneeId === currentUser.id || h.reporterIds?.includes(currentUser.id)) && 
+                    ['assign', 'submit', 'forward_info'].includes(h.action)
+                  );
+                  const personalDeadline = targetedHistory?.hanXuLy || document.hanXuLy;
+                  const completionEvent = document.history?.find(h => 
+                     h.actorId === currentUser.id && 
+                     (['approve', 'reject', 'complete'].includes(h.action) || (h.action === 'submit' && h.isReturn))
+                  );
+                  
+                  if (personalDeadline && completionEvent) {
+                    const deadlineDate = new Date(personalDeadline).setHours(23, 59, 59, 999);
+                    const completionDate = new Date(completionEvent.timestamp).getTime();
+                    
+                    if (completionDate > deadlineDate) {
+                      branchLabel += " (Quá hạn)";
+                      branchClass = "text-red-600";
+                    } else if (completionDate < new Date(personalDeadline).setHours(0, 0, 0, 0)) {
+                      branchLabel += " (Trước hạn)";
+                    } else {
+                      branchLabel += " (Đúng hạn)";
+                    }
+                  }
               } else if (branchStatus === 'waiting_reply') {
                   branchLabel = 'Đã hoàn thành (Chờ trả lời)';
                   branchClass = 'text-blue-600';
