@@ -42,6 +42,18 @@ const TimelineItem = ({ h, getActionLabel, userList }: { h: any, getActionLabel:
   
   const allTargets = [...targetDeptNames, ...targetUserNames];
 
+  if (allTargets.length === 0 && h.targetRole) {
+    const roleLabels: any = {
+      giam_doc: "Giám đốc",
+      pho_giam_doc: "Phó Giám đốc",
+      truong_ban: "Trưởng ban",
+      chuyen_vien: "Chuyên viên",
+      van_thu: "Văn thư",
+      admin: "Admin"
+    };
+    allTargets.push(roleLabels[h.targetRole] || h.targetRole);
+  }
+
   return (
     <Box className="relative pl-6 border-l-2 border-blue-200">
       <Box className="absolute w-3 h-3 bg-blue-500 rounded-full -left-[7px] top-1"></Box>
@@ -99,6 +111,8 @@ const DocumentDetail: React.FC = () => {
 
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [assignTargetRole, setAssignTargetRole] = useState<UserRole>('truong_ban');
+  const [assignTargetUserIds, setAssignTargetUserIds] = useState<string[]>([]);
+  const [showAssignTargetList, setShowAssignTargetList] = useState(true);
   const [assignNote, setAssignNote] = useState('');
   const [assignDeadline, setAssignDeadline] = useState('');
 
@@ -230,7 +244,7 @@ const DocumentDetail: React.FC = () => {
       action,
       actorId: currentUser.id,
       actorName: currentUser.name,
-      actorRole: currentRole,
+      actorRole: currentUser.role,
       targetRole,
       timestamp: new Date().toISOString(),
       note,
@@ -346,6 +360,7 @@ const DocumentDetail: React.FC = () => {
     setAssignCrossModalVisible(false);
     setFinishCrossModalVisible(false);
     
+    setAssignTargetUserIds([]);
     setAssignNote('');
     setAssignDeadline('');
     setRejectReason('');
@@ -365,7 +380,10 @@ const DocumentDetail: React.FC = () => {
 
   // ---- External Flow Buttons ----
   const renderExternalButtons = () => {
-    const isAssignee = document.assigneeRole === currentRole;
+    const isExplicitTarget = document.targetUserIds?.includes(currentUser.id) || document.targetDepartmentIds?.includes(currentUser.departmentId);
+    const branchStatus = currentUser ? getBranchStatus(document, currentUser.id, currentUser.departmentId, currentUser.role) : 'completed';
+    const isMainAssignee = document.assigneeRole === currentRole;
+    const isAssignee = isMainAssignee || (isExplicitTarget && branchStatus === 'processing');
     if (!isAssignee) return null;
 
     switch (currentRole) {
@@ -388,7 +406,8 @@ const DocumentDetail: React.FC = () => {
           </Button>
         );
       case 'giam_doc':
-        const mostRecentOtherActorGiamDoc = document.history?.find((h: any) => h.actorRole !== 'giam_doc')?.actorRole;
+      case 'pho_giam_doc':
+        const mostRecentOtherActorGiamDoc = document.history?.map((h: any) => userList.find(u => u.id === h.actorId)?.role || h.actorRole).find((role: any) => role !== currentRole);
         const isFromBelow = mostRecentOtherActorGiamDoc === 'truong_ban' || mostRecentOtherActorGiamDoc === 'chuyen_vien';
         
         if (isFromBelow) {
@@ -404,18 +423,31 @@ const DocumentDetail: React.FC = () => {
           );
         }
 
+        const hideRejectForPhoGiamDoc = currentRole === 'pho_giam_doc' && mostRecentOtherActorGiamDoc === 'giam_doc';
+
         return (
           <>
-            <Button variant="secondary" className="flex-1 text-red-600 border border-red-200" onClick={() => setRejectModalVisible(true)}>
-              Trả lại
-            </Button>
+            {!hideRejectForPhoGiamDoc && (
+              <Button variant="secondary" className="flex-1 text-red-600 border border-red-200" onClick={() => setRejectModalVisible(true)}>
+                Trả lại
+              </Button>
+            )}
             <Button variant="secondary" className="flex-1" onClick={() => { setAssignTargetRole('truong_ban'); setAssignModalVisible(true); }}>
               Giao Ban
             </Button>
+            {!isMainAssignee && (
+              <Button className="flex-1 !bg-green-600 text-white" onClick={() => {
+                if (window.confirm("Bạn có chắc chắn muốn kết thúc nhánh xử lý của mình?")) {
+                  handleAction('complete', currentRole, undefined, undefined, 'Đã xử lý xong');
+                }
+              }}>
+                Kết thúc
+              </Button>
+            )}
           </>
         );
       case 'truong_ban':
-        const mostRecentOtherActor = document.history?.find((h: any) => h.actorRole !== 'truong_ban')?.actorRole;
+        const mostRecentOtherActor = document.history?.map((h: any) => userList.find(u => u.id === h.actorId)?.role || h.actorRole).find((role: any) => role !== 'truong_ban');
         const isFromChuyenVien = mostRecentOtherActor === 'chuyen_vien';
         if (isFromChuyenVien) {
           return (
@@ -431,42 +463,38 @@ const DocumentDetail: React.FC = () => {
         }
         return (
           <>
-            <Button variant="secondary" className="flex-1 text-red-600 border border-red-200" onClick={() => setRejectModalVisible(true)}>
-              Trả lại
-            </Button>
             <Button variant="secondary" className="flex-1" onClick={() => { setAssignTargetRole('chuyen_vien'); setAssignModalVisible(true); }}>
               Phân công CV
             </Button>
+            {!isMainAssignee && (
+              <Button className="flex-1 !bg-green-600 text-white" onClick={() => {
+                if (window.confirm("Bạn có chắc chắn muốn kết thúc nhánh xử lý của mình?")) {
+                  handleAction('complete', currentRole, undefined, undefined, 'Đã xử lý xong');
+                }
+              }}>
+                Kết thúc
+              </Button>
+            )}
           </>
         );
       case 'chuyen_vien':
         return (
-          <Button className="flex-1 !bg-blue-600 text-white" onClick={() => { 
-            const history = document.history || [];
-            const latestTerminalIndex = history.findIndex((h: any) => 
-               h.actorId === currentUser.id && 
-               (['complete', 'approve', 'reject'].includes(h.action) || (h.action === 'submit' && h.isReturn))
-            );
-            
-            const delegators = new Set<string>();
-            for (let i = 0; i < history.length; i++) {
-               if (latestTerminalIndex !== -1 && i >= latestTerminalIndex) break;
-               const h = history[i];
-               if (!h.isReturn && (
-                   h.targetUserIds?.includes(currentUser.id) || 
-                   h.assigneeId === currentUser.id || 
-                   h.targetDepartmentIds?.some((id: string) => id.toLowerCase() === currentUser.departmentId.toLowerCase())
-               )) {
-                   if (h.actorId) delegators.add(h.actorId);
-               }
-            }
-            
-            setSubmitTargetUserIds(Array.from(delegators));
-            setSubmitTargetRole('truong_ban'); 
-            setSubmitResultModalVisible(true); 
-          }}>
-            Trình kết quả
-          </Button>
+          <>
+            <Button className="flex-1 !bg-blue-600 text-white" onClick={() => {
+              setSubmitLeaderStatus('ld_submit_reviewing');
+              setSubmitLeaderNote('Trình LĐ Ban ký duyệt');
+              setSubmitLeaderModalVisible(true);
+            }}>
+              Trình LĐ Ban
+            </Button>
+            <Button className="flex-1 !bg-red-500 text-white" onClick={() => {
+              if (window.confirm("Bạn có chắc chắn muốn kết thúc văn bản này?")) {
+                handleAction('complete', 'chuyen_vien', 'completed', { internalStatus: 'completed' }, 'Kết thúc văn bản');
+              }
+            }}>
+              Kết thúc
+            </Button>
+          </>
         );
       default:
         return null;
@@ -673,7 +701,7 @@ const DocumentDetail: React.FC = () => {
         </>
       );
     }
-    if (status === 'gd_submit_reviewing' && currentRole === 'giam_doc') {
+    if (status === 'gd_submit_reviewing' && (currentRole === 'giam_doc' || currentRole === 'pho_giam_doc')) {
       return (
         <>
           <Button variant="secondary" className="flex-1 text-red-600 border border-red-200" onClick={() => setRejectModalVisible(true)}>
@@ -831,7 +859,8 @@ const DocumentDetail: React.FC = () => {
       targetUserIds: [selectedMainProcessorId, ...selectedReporterIds],
       assigneeId: selectedMainProcessorId,
       reporterIds: selectedReporterIds,
-      noiDungDeXuat: submitLeaderNote
+      noiDungDeXuat: submitLeaderNote,
+      senderDepartmentId: currentUser.departmentId
     }, finalNote);
     
     navigate('/', { replace: true });
@@ -1226,6 +1255,7 @@ const DocumentDetail: React.FC = () => {
         const isExplicitReporter = document.reporterIds?.includes(currentUser.id) && (document.assigneeId !== currentUser.id || document.trangThai === 'completed');
         
         const hasActions = (document.trangThai !== 'completed' && document.trangThai !== 'deleted' && document.trangThai !== 'info');
+        const isInSubmitSubflow = ['ld_submit_reviewing', 'gd_submit_reviewing', 'vt_submit_publishing'].includes(document.internalStatus || '');
         
         if (!hasActions && !showRecall && !isExplicitReporter) return null;
 
@@ -1241,9 +1271,9 @@ const DocumentDetail: React.FC = () => {
               ) : null
             ) : (
               <>
-                {hasActions && !isInternal && renderExternalButtons()}
+                {hasActions && !isInternal && !isInSubmitSubflow && renderExternalButtons()}
                 {hasActions && document.documentType === 'internal_cross' && renderInternalCrossButtons()}
-                {hasActions && document.documentType === 'internal_submit' && renderInternalSubmitButtons()}
+                {hasActions && (document.documentType === 'internal_submit' || isInSubmitSubflow) && renderInternalSubmitButtons()}
               </>
             )}
             
@@ -1324,17 +1354,90 @@ const DocumentDetail: React.FC = () => {
             highLight: true, 
             onClick: () => {
               if (isDateOverdue(assignDeadline, currentDeadline)) return;
-              handleAction('assign', assignTargetRole, undefined, assignDeadline ? { hanXuLy: assignDeadline } : {}, assignNote);
+              
+              const extraUpdates: any = assignDeadline ? { hanXuLy: assignDeadline } : {};
+              if (assignTargetUserIds.length > 0) {
+                extraUpdates.targetUserIds = assignTargetUserIds;
+              }
+
+              handleAction('assign', assignTargetRole, undefined, extraUpdates, assignNote);
             } 
           }
         ]}
       >
         <Box className="p-4 space-y-4">
-          <Select value={assignTargetRole} onChange={(v: any) => setAssignTargetRole(v as UserRole)}>
+          <Select value={assignTargetRole} onChange={(v: any) => { setAssignTargetRole(v as UserRole); setShowAssignTargetList(true); }} closeOnSelect>
             <Select.Option value="truong_ban" title="Trưởng ban" />
+            <Select.Option value="pho_giam_doc" title="Phó Giám đốc" />
             <Select.Option value="chuyen_vien" title="Chuyên viên" />
           </Select>
-          <Input.TextArea placeholder="Ý kiến chỉ đạo..." value={assignNote} onChange={(e) => setAssignNote(e.target.value)} />
+          {assignTargetRole && (
+            <Box>
+              <Box className="flex justify-between items-center mb-2">
+                <Text className="font-medium text-gray-700 text-sm">Chọn người nhận cụ thể:</Text>
+                <Text className="text-blue-500 text-xs cursor-pointer active:opacity-70" onClick={() => setShowAssignTargetList(!showAssignTargetList)}>
+                  {showAssignTargetList ? 'Thu gọn' : 'Mở rộng'}
+                </Text>
+              </Box>
+              {showAssignTargetList && (
+                <Box className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2">
+                  {userList
+                    .filter(u => {
+                      if (currentRole === 'giam_doc' || currentRole === 'pho_giam_doc') {
+                        if (assignTargetRole === 'pho_giam_doc') {
+                          return u.role === 'pho_giam_doc' || u.jobTitle === 'Phó Giám đốc';
+                        }
+                        return u.role === assignTargetRole;
+                      }
+                      return u.role === assignTargetRole && u.departmentId === currentUser.departmentId;
+                    })
+                    .map(u => (
+                      <Checkbox
+                        key={u.id}
+                        label={`${u.name} - ${departments.find(d => d.id === u.departmentId)?.name || ''}`}
+                        checked={assignTargetUserIds.includes(u.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setAssignTargetUserIds([...assignTargetUserIds, u.id]);
+                          else setAssignTargetUserIds(assignTargetUserIds.filter(id => id !== u.id));
+                        }}
+                      />
+                    ))
+                  }
+                  {userList.filter(u => {
+                      if (currentRole === 'giam_doc' || currentRole === 'pho_giam_doc') {
+                        if (assignTargetRole === 'pho_giam_doc') {
+                          return u.role === 'pho_giam_doc' || u.jobTitle === 'Phó Giám đốc';
+                        }
+                        return u.role === assignTargetRole;
+                      }
+                      return u.role === assignTargetRole && u.departmentId === currentUser.departmentId;
+                    }).length === 0 && (
+                      <Text className="text-gray-400 text-sm italic">Không có danh sách</Text>
+                  )}
+                </Box>
+              )}
+            </Box>
+          )}
+          
+          {assignTargetUserIds.length > 0 && (
+            <Box className="p-3 bg-blue-50 rounded-lg text-sm border border-blue-100">
+               <Text className="font-medium text-blue-800 mb-2">Đã chọn xử lý:</Text>
+               <Box className="flex flex-wrap gap-2">
+                 {assignTargetUserIds.map(id => {
+                    const u = userList.find(usr => usr.id === id);
+                    if (!u) return null;
+                    return (
+                      <Box key={id} className="bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-md text-xs font-medium flex items-center shadow-sm">
+                        {u.name}
+                        <Box className="ml-2 cursor-pointer text-gray-400 active:text-red-500" onClick={() => setAssignTargetUserIds(assignTargetUserIds.filter(x => x !== id))}>✕</Box>
+                      </Box>
+                    );
+                 })}
+               </Box>
+            </Box>
+          )}
+
+          <Input.TextArea placeholder="Ý kiến chỉ đạo..." value={assignNote} onChange={(e) => setAssignNote(e.target.value)} onFocus={() => setShowAssignTargetList(false)} />
           <Box>
             <Text className="font-medium text-gray-700 mb-2 text-sm">Hạn xử lý (nếu có):</Text>
             <Input type={"date" as any} value={assignDeadline} onChange={(e) => setAssignDeadline(e.target.value)} />

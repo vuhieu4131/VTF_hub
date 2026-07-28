@@ -12,6 +12,7 @@ import { collection, getDocs, deleteDoc } from "firebase/firestore";
 const roleLabels: Record<UserRole | 'admin', string> = {
   van_thu: "Văn thư",
   giam_doc: "Giám đốc",
+  pho_giam_doc: "Phó Giám đốc",
   truong_ban: "Trưởng/Phó Ban",
   chuyen_vien: "Chuyên viên",
   admin: "Quản trị hệ thống",

@@ -1,6 +1,7 @@
 import { atom, selector } from "recoil";
 import { getUserInfo } from "zmp-sdk";
 import { Document, DocumentStatus, User, UserRole, DepartmentId } from "types/document";
+import { getBranchStatus } from "./utils/workflow";
 import documents from "../mock/documents.json";
 
 export const currentUserState = atom<User | null>({
@@ -84,7 +85,24 @@ export const filteredDocumentListState = selector<Document[]>({
         }
       } else {
         if (!doc.documentType || doc.documentType === 'external_in') {
-          isAssigned = true;
+          const isExplicitTargetUser = doc.targetUserIds?.includes(currentUser.id);
+          const isExplicitTargetDept = doc.targetDepartmentIds?.includes(currentUser.departmentId);
+          const isMainAssignee = doc.assigneeRole === currentUser.role;
+          
+          if (isMainAssignee) {
+             if (doc.targetUserIds && doc.targetUserIds.length > 0) {
+                 isAssigned = !!isExplicitTargetUser;
+             } else if (doc.targetDepartmentIds && doc.targetDepartmentIds.length > 0) {
+                 isAssigned = !!isExplicitTargetDept;
+             } else {
+                 isAssigned = true;
+             }
+          } else if (isExplicitTargetUser || isExplicitTargetDept) {
+             const branchStatus = getBranchStatus(doc as any, currentUser.id, currentUser.departmentId, currentUser.role);
+             if (branchStatus === 'processing') {
+                 isAssigned = true;
+             }
+          }
         } else {
           const history = doc.history || [];
           const latestRelevantEvent = history.find(h => {
@@ -112,7 +130,7 @@ export const filteredDocumentListState = selector<Document[]>({
                  isAssigned = true;
              }
           } else {
-             if (doc.documentType === 'internal_submit' && (currentUser.role === 'giam_doc' || currentUser.role === 'van_thu')) {
+             if (doc.documentType === 'internal_submit' && (currentUser.role === 'giam_doc' || currentUser.role === 'pho_giam_doc' || currentUser.role === 'van_thu')) {
                  isAssigned = true;
              } else if (doc.creatorId === currentUser.id) {
                  isAssigned = doc.trangThai === 'pending' || doc.trangThai === 'waiting';

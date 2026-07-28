@@ -79,7 +79,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, currentTab
         const isTarget = document.targetDepartmentIds?.includes(currentUser.departmentId) || document.targetUserIds?.includes(currentUser.id) || document.reporterIds?.includes(currentUser.id);
 
         if (document.documentType === 'internal_submit') {
-          if (currentUser.role === 'giam_doc' || currentUser.role === 'van_thu') isAssigned = true;
+          if (currentUser.role === 'giam_doc' || currentUser.role === 'pho_giam_doc' || currentUser.role === 'van_thu') isAssigned = true;
           else if (isSender) isAssigned = true;
         } else if (document.documentType === 'internal_cross') {
           const status = document.internalStatus;
@@ -207,6 +207,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ document, currentTab
         </Text>
         <Text size="small" className="text-blue-600 font-medium truncate max-w-[35%] text-center">
           {document.assigneeRole === 'giam_doc' ? 'Giám đốc' : 
+           document.assigneeRole === 'pho_giam_doc' ? 'Phó Giám đốc' :
            document.assigneeRole === 'truong_ban' ? 'Trưởng ban' : 
            document.assigneeRole === 'chuyen_vien' ? 'Chuyên viên' : 'Văn thư'}
         </Text>

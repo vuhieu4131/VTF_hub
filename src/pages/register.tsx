@@ -20,7 +20,7 @@ const Register: React.FC = () => {
     if (deptId === 'ban_giam_doc') {
       return [
         { value: 'Giám đốc', role: 'giam_doc', label: 'Giám đốc' },
-        { value: 'Phó Giám đốc', role: 'giam_doc', label: 'Phó Giám đốc' },
+        { value: 'Phó Giám đốc', role: 'pho_giam_doc', label: 'Phó Giám đốc' },
       ];
     }
     if (deptId === 'van_thu') {

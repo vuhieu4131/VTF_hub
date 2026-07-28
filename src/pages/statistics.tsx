@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from "react";
-import { Page, Box, Text, Header, Tabs } from "zmp-ui";
+import { Page, Box, Text, Header, Tabs, Modal } from "zmp-ui";
 import { useRecoilValue } from "recoil";
 import { documentListState, userListState, currentUserState, statisticsPermissionsState } from "../state";
 import { departments as allDepartments } from "../constants/departments";
 import { getBranchStatus } from "../utils/workflow";
+import { DocumentCard } from "../components/document-card";
 
 const Statistics: React.FC = () => {
   const allDocs = useRecoilValue(documentListState);
@@ -46,12 +47,29 @@ const Statistics: React.FC = () => {
     });
   }, [allDocs, fromDate, toDate]);
 
+  // Modal States
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalDocs, setModalDocs] = useState<any[]>([]);
+  const [modalTitle, setModalTitle] = useState('');
+
+  const handleBoxClick = (title: string, docsList: any[]) => {
+     if (docsList.length === 0) return;
+     setModalTitle(title);
+     setModalDocs(docsList);
+     setModalVisible(true);
+  };
+
   // 1. Overview Stats
   const total = docs.length;
-  const pending = docs.filter(d => d.trangThai === 'pending').length;
-  const warning = docs.filter(d => d.trangThai === 'warning').length;
-  const overdue = docs.filter(d => d.trangThai === 'overdue').length;
-  const completed = docs.filter(d => d.trangThai === 'completed' || d.trangThai === 'info').length;
+  const pendingDocs = docs.filter(d => d.trangThai === 'pending');
+  const warningDocs = docs.filter(d => d.trangThai === 'warning');
+  const overdueDocs = docs.filter(d => d.trangThai === 'overdue');
+  const completedDocs = docs.filter(d => d.trangThai === 'completed' || d.trangThai === 'info');
+
+  const pending = pendingDocs.length;
+  const warning = warningDocs.length;
+  const overdue = overdueDocs.length;
+  const completed = completedDocs.length;
 
   // 2. Department Stats
   const deptStats = useMemo(() => {
@@ -66,8 +84,10 @@ const Statistics: React.FC = () => {
          return false;
       });
 
-      let deptPending = 0;
-      let deptCompleted = 0;
+      let deptPendingDocs: any[] = [];
+      let deptWarningDocs: any[] = [];
+      let deptOverdueDocs: any[] = [];
+      let deptCompletedDocs: any[] = [];
       
       involvedDocs.forEach(d => {
         const usersInDept = users.filter(u => u.departmentId === dept.id);
@@ -82,28 +102,38 @@ const Statistics: React.FC = () => {
         });
         
         if (!allUsersCompleted && anyUserInvolved) {
-           deptPending++;
+           if (d.trangThai === 'overdue') deptOverdueDocs.push(d);
+           else if (d.trangThai === 'warning') deptWarningDocs.push(d);
+           else deptPendingDocs.push(d);
         } else {
-           deptCompleted++;
+           deptCompletedDocs.push(d);
         }
       });
 
       return {
         ...dept,
         total: involvedDocs.length,
-        pending: deptPending,
-        completed: deptCompleted
+        pending: deptPendingDocs.length,
+        warning: deptWarningDocs.length,
+        overdue: deptOverdueDocs.length,
+        completed: deptCompletedDocs.length,
+        pendingDocs: deptPendingDocs,
+        warningDocs: deptWarningDocs,
+        overdueDocs: deptOverdueDocs,
+        completedDocs: deptCompletedDocs
       };
-    }).sort((a, b) => b.pending - a.pending);
+    }).sort((a, b) => b.pending + b.warning + b.overdue - (a.pending + a.warning + a.overdue));
   }, [docs, departments, users]);
 
   // 3. User Stats grouped by Dept
   const userStats = useMemo(() => {
     return departments.map(dept => {
        const deptUsers = users.filter(u => u.departmentId === dept.id);
-       const userMetrics = deptUsers.map(user => {
-          let uPending = 0;
-          let uCompleted = 0;
+        const userMetrics = deptUsers.map(user => {
+          let uPendingDocs: any[] = [];
+          let uWarningDocs: any[] = [];
+          let uOverdueDocs: any[] = [];
+          let uCompletedDocs: any[] = [];
           docs.forEach(d => {
              const status = getBranchStatus(d, user.id, user.departmentId, user.role);
              const isCreator = d.creatorId === user.id;
@@ -115,17 +145,28 @@ const Statistics: React.FC = () => {
 
              if (isInvolved) {
                  if (status === 'processing' || status === 'waiting_reply') {
-                    uPending++;
+                    if (d.trangThai === 'overdue') uOverdueDocs.push(d);
+                    else if (d.trangThai === 'warning') uWarningDocs.push(d);
+                    else uPendingDocs.push(d);
                  } else {
-                    uCompleted++;
+                    uCompletedDocs.push(d);
                  }
              }
           });
-          return { ...user, pending: uPending, completed: uCompleted, total: uPending + uCompleted };
+          const pending = uPendingDocs.length;
+          const warning = uWarningDocs.length;
+          const overdue = uOverdueDocs.length;
+          const completed = uCompletedDocs.length;
+          return { 
+             ...user, 
+             pending, warning, overdue, completed, 
+             total: pending + warning + overdue + completed,
+             pendingDocs: uPendingDocs, warningDocs: uWarningDocs, overdueDocs: uOverdueDocs, completedDocs: uCompletedDocs
+          };
        });
        return {
          ...dept,
-         users: userMetrics.filter(u => u.total > 0).sort((a, b) => b.pending - a.pending)
+         users: userMetrics.filter(u => u.total > 0).sort((a, b) => b.pending + b.warning + b.overdue - (a.pending + a.warning + a.overdue))
        };
     }).filter(d => d.users.length > 0);
   }, [docs, departments, users]);
@@ -165,20 +206,20 @@ const Statistics: React.FC = () => {
           {/* OVERVIEW TAB or PERSONAL VIEW */}
           {(activeTab === 'overview' || viewType === 'personal') && (
             <Box className="space-y-6">
-            <Box className="grid grid-cols-2 gap-4 mb-6">
-              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
+              <Box className="grid grid-cols-2 gap-4 mb-6">
+              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 cursor-pointer active:opacity-70" onClick={() => handleBoxClick('Đang xử lý - Tổng quan', pendingDocs)}>
                 <Text className="text-gray-500 text-sm mb-1">Đang xử lý</Text>
                 <Text className="text-3xl font-bold text-blue-600">{pending}</Text>
               </Box>
-              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-yellow-500">
+              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-yellow-500 cursor-pointer active:opacity-70" onClick={() => handleBoxClick('Sắp đến hạn - Tổng quan', warningDocs)}>
                 <Text className="text-gray-500 text-sm mb-1">Sắp đến hạn</Text>
                 <Text className="text-3xl font-bold text-yellow-600">{warning}</Text>
               </Box>
-              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500">
+              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-red-500 cursor-pointer active:opacity-70" onClick={() => handleBoxClick('Trễ hạn - Tổng quan', overdueDocs)}>
                 <Text className="text-gray-500 text-sm mb-1">Trễ hạn</Text>
                 <Text className="text-3xl font-bold text-red-600">{overdue}</Text>
               </Box>
-              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500">
+              <Box className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-green-500 cursor-pointer active:opacity-70" onClick={() => handleBoxClick('Hoàn thành - Tổng quan', completedDocs)}>
                 <Text className="text-gray-500 text-sm mb-1">Hoàn thành</Text>
                 <Text className="text-3xl font-bold text-green-600">{completed}</Text>
               </Box>
@@ -215,11 +256,19 @@ const Statistics: React.FC = () => {
                   <Text className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Tổng: {dept.total}</Text>
                 </Box>
                 <Box className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                    <Box className="text-center flex-1">
+                    <Box className="text-center flex-1 cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Đang xử lý - ${dept.name}`, dept.pendingDocs)}>
                       <Text className="text-blue-600 font-bold text-xl">{dept.pending}</Text>
-                      <Text className="text-gray-500 text-xs">Tồn đọng</Text>
+                      <Text className="text-gray-500 text-xs">Đang xử lý</Text>
                     </Box>
-                    <Box className="text-center flex-1 border-l border-gray-200">
+                    <Box className="text-center flex-1 border-l border-gray-200 cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Đến hạn - ${dept.name}`, dept.warningDocs)}>
+                      <Text className="text-yellow-600 font-bold text-xl">{dept.warning}</Text>
+                      <Text className="text-gray-500 text-xs">Đến hạn</Text>
+                    </Box>
+                    <Box className="text-center flex-1 border-l border-gray-200 cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Trễ hạn - ${dept.name}`, dept.overdueDocs)}>
+                      <Text className="text-red-600 font-bold text-xl">{dept.overdue}</Text>
+                      <Text className="text-gray-500 text-xs">Trễ hạn</Text>
+                    </Box>
+                    <Box className="text-center flex-1 border-l border-gray-200 cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Hoàn thành - ${dept.name}`, dept.completedDocs)}>
                       <Text className="text-green-600 font-bold text-xl">{dept.completed}</Text>
                       <Text className="text-gray-500 text-xs">Hoàn thành</Text>
                     </Box>
@@ -244,12 +293,20 @@ const Statistics: React.FC = () => {
                                 <Text className="font-semibold text-gray-800">{u.name}</Text>
                                 <Text className="text-xs text-gray-500 capitalize">{u.role.replace('_', ' ')}</Text>
                             </Box>
-                            <Box className="flex space-x-4 text-center">
-                                <Box>
+                            <Box className="flex space-x-3 text-center">
+                                <Box className="cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Đang xử lý - ${u.name}`, u.pendingDocs)}>
                                   <Text className="text-blue-600 font-bold text-lg">{u.pending}</Text>
-                                  <Text className="text-[10px] text-gray-400">Tồn</Text>
+                                  <Text className="text-[10px] text-gray-400">Đang XL</Text>
                                 </Box>
-                                <Box>
+                                <Box className="cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Đến hạn - ${u.name}`, u.warningDocs)}>
+                                  <Text className="text-yellow-600 font-bold text-lg">{u.warning}</Text>
+                                  <Text className="text-[10px] text-gray-400">Đến hạn</Text>
+                                </Box>
+                                <Box className="cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Trễ hạn - ${u.name}`, u.overdueDocs)}>
+                                  <Text className="text-red-600 font-bold text-lg">{u.overdue}</Text>
+                                  <Text className="text-[10px] text-gray-400">Trễ hạn</Text>
+                                </Box>
+                                <Box className="cursor-pointer active:opacity-70" onClick={() => handleBoxClick(`Hoàn thành - ${u.name}`, u.completedDocs)}>
                                   <Text className="text-green-600 font-bold text-lg">{u.completed}</Text>
                                   <Text className="text-[10px] text-gray-400">Xong</Text>
                                 </Box>
@@ -264,6 +321,21 @@ const Statistics: React.FC = () => {
         )}
         </Box>
       </Box>
+
+      {/* Documents List Modal */}
+      <Modal visible={modalVisible} title={modalTitle} onClose={() => setModalVisible(false)} actions={[{ text: "Đóng", close: true }]}>
+        <Box className="p-4 max-h-[70vh] overflow-y-auto bg-gray-50">
+          {modalDocs.length === 0 ? (
+            <Text className="text-center text-gray-500 py-4">Không có văn bản nào</Text>
+          ) : (
+            <Box className="space-y-4">
+              {modalDocs.map(doc => (
+                <DocumentCard key={doc.id} document={doc} currentTab="overview" />
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Modal>
     </Page>
   );
 };
