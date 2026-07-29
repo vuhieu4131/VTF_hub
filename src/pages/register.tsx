@@ -4,69 +4,32 @@ import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { departments } from "../constants/departments";
-import { UserRole, DepartmentId } from "../types/document";
 
 const Register: React.FC = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [departmentId, setDepartmentId] = useState<DepartmentId | "">("");
-  const [jobTitle, setJobTitle] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const getRoleOptions = (deptId: DepartmentId | "") => {
-    if (deptId === 'ban_giam_doc') {
-      return [
-        { value: 'Giám đốc', role: 'giam_doc', label: 'Giám đốc' },
-        { value: 'Phó Giám đốc', role: 'pho_giam_doc', label: 'Phó Giám đốc' },
-      ];
-    }
-    if (deptId === 'van_thu') {
-      return [
-        { value: 'Văn thư', role: 'van_thu', label: 'Văn thư' },
-        { value: 'Trợ lý', role: 'van_thu', label: 'Trợ lý' },
-      ];
-    }
-    if (deptId) {
-      return [
-        { value: 'Trưởng ban', role: 'truong_ban', label: 'Trưởng ban' },
-        { value: 'Phó trưởng ban', role: 'truong_ban', label: 'Phó trưởng ban' },
-        { value: 'Chuyên viên', role: 'chuyen_vien', label: 'Chuyên viên' },
-      ];
-    }
-    return [];
-  };
-
   const handleRegister = async () => {
-    if (!name || !email || !password || !departmentId || !jobTitle) {
+    if (!name || !email || !password) {
       setError("Vui lòng điền đầy đủ thông tin");
       return;
     }
-    
-    const roleOptions = getRoleOptions(departmentId);
-    const selectedOption = roleOptions.find(o => o.value === jobTitle);
-    if (!selectedOption) {
-      setError("Chức vụ không hợp lệ");
-      return;
-    }
-    
-    const role = selectedOption.role;
 
     try {
       setError("");
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Save additional profile info to Firestore
+      // Save initial pending profile info to Firestore
       await setDoc(doc(db, "users", user.uid), {
         id: user.uid,
         name,
         email,
-        role,
-        jobTitle,
-        departmentId
+        role: 'guest',
+        status: 'pending_approval'
       });
 
       navigate("/");
@@ -113,36 +76,8 @@ const Register: React.FC = () => {
           </Box>
           
           <Box>
-            <Text className="text-sm text-gray-600 mb-1">Ban</Text>
-            <Select 
-              value={departmentId} 
-              onChange={(v) => {
-                setDepartmentId(v as DepartmentId);
-                setJobTitle(""); // reset jobTitle when department changes
-              }}
-              placeholder="Chọn Ban"
-              closeOnSelect
-            >
-              {departments.map(dept => (
-                <Select.Option key={dept.id} value={dept.id} title={dept.name} />
-              ))}
-            </Select>
           </Box>
-
-          <Box>
-            <Text className="text-sm text-gray-600 mb-1">Chức vụ</Text>
-            <Select 
-              value={jobTitle} 
-              onChange={(v) => setJobTitle(v as string)}
-              placeholder="Chọn Chức vụ"
-              closeOnSelect
-              disabled={!departmentId}
-            >
-              {getRoleOptions(departmentId).map(opt => (
-                <Select.Option key={opt.value} value={opt.value} title={opt.label} />
-              ))}
-            </Select>
-          </Box>
+          
           
           <Button fullWidth className="!bg-blue-600 text-white mt-6" onClick={handleRegister}>
             Đăng ký

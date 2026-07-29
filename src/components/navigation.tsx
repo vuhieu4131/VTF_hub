@@ -3,23 +3,29 @@ import React, { FC, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { MenuItem } from "types/menu";
 import { BottomNavigation, Icon } from "zmp-ui";
+import { useRecoilValue } from "recoil";
+import { currentUserState } from "../state";
 
 const tabs: Record<string, MenuItem> = {
   "/": {
-    label: "Trang chủ",
-    icon: <Icon icon="zi-home" />,
+    label: "Lịch làm việc",
+    icon: <Icon icon="zi-calendar" />,
   },
-  "/statistics": {
-    label: "Thống kê",
-    icon: <Icon icon="zi-poll" />,
+  "/events": {
+    label: "Sự kiện",
+    icon: <Icon icon="zi-star" />,
   },
-  "/create": {
-    label: "Tạo mới",
-    icon: <Icon icon="zi-plus" />,
+  "/documents": {
+    label: "Văn bản",
+    icon: <Icon icon="zi-file" />,
   },
   "/profile": {
-    label: "Cá nhân",
+    label: "Hồ sơ",
     icon: <Icon icon="zi-user" />,
+  },
+  "/admin-settings": {
+    label: "Quản trị",
+    icon: <Icon icon="zi-setting" />,
   },
 };
 
@@ -40,14 +46,22 @@ export const Navigation: FC = () => {
     return <></>;
   }
 
+  const currentUser = useRecoilValue(currentUserState);
+
+  const filteredTabs = Object.keys(tabs).filter(path => {
+    if (path === '/admin-settings' && currentUser?.role !== 'admin') return false;
+    if (path === '/documents' && currentUser?.role !== 'admin') return false;
+    return true;
+  });
+
   return (
     <BottomNavigation
       id="footer"
       activeKey={location.pathname}
       onChange={navigate}
-      className="z-50"
+      className="z-50 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] border-t-0"
     >
-      {Object.keys(tabs).map((path: TabKeys) => (
+      {filteredTabs.map((path: string) => (
         <BottomNavigation.Item
           key={path}
           label={tabs[path].label}

@@ -3,13 +3,16 @@ import { Route, Routes } from "react-router";
 import { Box } from "zmp-ui";
 import { Navigation } from "./navigation";
 import HomePage from "pages/home";
+import DocumentsPage from "pages/documents";
 import StatisticsPage from "pages/statistics";
 import CreatePage from "pages/create";
 import DocumentDetailPage from "pages/document-detail";
 import ProfilePage from "pages/profile";
+import EventsPage from "pages/events";
 import LoginPage from "pages/login";
 import RegisterPage from "pages/register";
 import AdminSettingsPage from "pages/admin-settings";
+import PendingApprovalPage from "pages/pending-approval";
 import { getSystemInfo } from "zmp-sdk";
 import { ScrollRestoration } from "./scroll-restoration";
 import { useRecoilValue } from "recoil";
@@ -39,20 +42,26 @@ export const Layout: FC = () => {
           <Route path="/register" element={<RegisterPage />}></Route>
           
           {currentUser ? (
-            <>
-              <Route path="/" element={<HomePage />}></Route>
-              <Route path="/statistics" element={<StatisticsPage />}></Route>
-              <Route path="/create" element={<CreatePage />}></Route>
-              <Route path="/document-detail" element={<DocumentDetailPage />}></Route>
-              <Route path="/profile" element={<ProfilePage />}></Route>
-              <Route path="/admin-settings" element={<AdminSettingsPage />}></Route>
-            </>
+            currentUser.status === 'pending_approval' ? (
+              <Route path="*" element={<PendingApprovalPage />}></Route>
+            ) : (
+              <>
+                <Route path="/" element={<HomePage />}></Route>
+                <Route path="/events" element={<EventsPage />}></Route>
+                <Route path="/documents" element={<DocumentsPage />}></Route>
+                <Route path="/statistics" element={<StatisticsPage />}></Route>
+                <Route path="/create" element={<CreatePage />}></Route>
+                <Route path="/document-detail" element={<DocumentDetailPage />}></Route>
+                <Route path="/profile" element={<ProfilePage />}></Route>
+                <Route path="/admin-settings" element={<AdminSettingsPage />}></Route>
+              </>
+            )
           ) : (
             <Route path="*" element={<LoginPage />}></Route>
           )}
         </Routes>
       </Box>
-      {currentUser && <Navigation />}
+      {currentUser && currentUser.status !== 'pending_approval' && <Navigation />}
     </Box>
   );
 };

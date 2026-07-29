@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useSetRecoilState } from "recoil";
-import { documentListState, currentUserState, userListState, statisticsPermissionsState } from "../state";
+import { documentListState, currentUserState, userListState, statisticsPermissionsState, allowedScheduleManagersState } from "../state";
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, orderBy, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -11,11 +11,13 @@ export const FirebaseSync: React.FC = () => {
   const setCurrentUser = useSetRecoilState(currentUserState);
   const setUserList = useSetRecoilState(userListState);
   const setStatsPermissions = useSetRecoilState(statisticsPermissionsState);
+  const setAllowedScheduleManagers = useSetRecoilState(allowedScheduleManagersState);
 
   useEffect(() => {
     let unsubscribeDocs: () => void;
     let unsubscribeUsers: () => void;
     let unsubscribeSettings: () => void;
+    let unsubscribeSchedule: () => void;
 
     // Sync Auth State
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -58,15 +60,25 @@ export const FirebaseSync: React.FC = () => {
            }
         });
 
+        unsubscribeSchedule = onSnapshot(doc(db, "settings", "schedulePermissions"), (doc) => {
+           if (doc.exists() && doc.data().allowedManagers) {
+              setAllowedScheduleManagers(doc.data().allowedManagers);
+           } else {
+              setAllowedScheduleManagers([]);
+           }
+        });
+
       } else {
         setCurrentUser(null);
         setDocs([]);
         setUserList([]);
         setStatsPermissions({});
+        setAllowedScheduleManagers([]);
         // Stop syncing if logged out
         if (unsubscribeDocs) unsubscribeDocs();
         if (unsubscribeUsers) unsubscribeUsers();
         if (unsubscribeSettings) unsubscribeSettings();
+        if (unsubscribeSchedule) unsubscribeSchedule();
       }
     });
 
@@ -75,6 +87,7 @@ export const FirebaseSync: React.FC = () => {
       if (unsubscribeDocs) unsubscribeDocs();
       if (unsubscribeUsers) unsubscribeUsers();
       if (unsubscribeSettings) unsubscribeSettings();
+      if (unsubscribeSchedule) unsubscribeSchedule();
     };
   }, [setDocs, setCurrentUser, setUserList]);
 

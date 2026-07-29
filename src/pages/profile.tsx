@@ -7,9 +7,11 @@ import { UserRole } from "../types/document";
 import { departments } from "../constants/departments";
 import { signOut, updatePassword } from "firebase/auth";
 import { auth, db } from "../firebase";
-import { collection, getDocs, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, getDoc } from "firebase/firestore";
+import { UserProfile } from "../types/document";
 
-const roleLabels: Record<UserRole | 'admin', string> = {
+const roleLabels: Record<UserRole, string> = {
+  guest: "Khách",
   van_thu: "Văn thư",
   giam_doc: "Giám đốc",
   pho_giam_doc: "Phó Giám đốc",
@@ -22,6 +24,17 @@ const ProfilePage: FC = () => {
   const userLoadable = useRecoilValueLoadable(userState);
   const currentUser = useRecoilValue(currentUserState);
   const navigate = useNavigate();
+  const [profile, setProfile] = React.useState<UserProfile | null>(null);
+
+  React.useEffect(() => {
+    if (currentUser?.profileId) {
+      getDoc(doc(db, "profiles", currentUser.profileId)).then(d => {
+        if (d.exists()) {
+          setProfile(d.data() as UserProfile);
+        }
+      });
+    }
+  }, [currentUser]);
 
   const handleLogout = async () => {
     try {
@@ -54,7 +67,7 @@ const ProfilePage: FC = () => {
       
       <Box className="flex-1 overflow-y-auto p-4 pb-24">
         {/* User Info Card */}
-        <Box className="bg-white rounded-xl p-5 mb-6 shadow-sm flex items-center space-x-4 border border-gray-100">
+        <Box className="bg-white rounded-xl p-5 mb-4 shadow-sm flex items-center space-x-4 border border-gray-100">
           <Avatar 
             src={userLoadable.state === 'hasValue' ? userLoadable.contents.avatar : undefined} 
             size={64}
@@ -62,16 +75,47 @@ const ProfilePage: FC = () => {
           />
           <Box className="flex-1">
             <Text className="font-bold text-lg text-gray-800">
-              {currentUser.name}
+              {profile?.fullName || currentUser.name}
             </Text>
             <Text className="text-gray-500 text-sm mt-1">
               Ban: {departments.find(d => d.id === currentUser.departmentId)?.name}
             </Text>
             <Text className="text-gray-500 text-sm">
-              Chức vụ: {currentUser.jobTitle || roleLabels[currentUser.role]}
+              {profile?.jobTitle || roleLabels[currentUser.role]} {profile?.employeeCode ? `(${profile.employeeCode})` : ''}
             </Text>
           </Box>
         </Box>
+
+        {/* Thong tin Luong & Phu cap */}
+        {profile && (
+          <Box className="bg-white rounded-xl shadow-sm mb-4 border border-gray-100 overflow-hidden">
+            <Box className="bg-blue-50 px-4 py-3 border-b border-blue-100">
+              <Text className="font-bold text-blue-800">Thông tin Lương & Thu nhập</Text>
+            </Box>
+            <Box className="p-4 space-y-3">
+              <Box className="flex justify-between items-center border-b border-gray-50 pb-2">
+                <Text className="text-gray-500">Hệ số lương (HSL)</Text>
+                <Text className="font-bold">{profile.salaryCoefficient}</Text>
+              </Box>
+              <Box className="flex justify-between items-center border-b border-gray-50 pb-2">
+                <Text className="text-gray-500">Ngày lên lương</Text>
+                <Box className="text-right">
+                  <Text className="font-bold text-orange-600">{profile.nextSalaryRaiseDate}</Text>
+                </Box>
+              </Box>
+              <Box className="flex justify-between items-center border-b border-gray-50 pb-2">
+                <Text className="text-gray-500">Hệ số Thu nhập TT</Text>
+                <Text className="font-bold">{profile.extraIncomeCoefficient}</Text>
+              </Box>
+              <Box className="flex justify-between items-center">
+                <Text className="text-gray-500">Ngày lên bậc TNTT</Text>
+                <Box className="text-right">
+                  <Text className="font-bold text-green-600">{profile.nextExtraIncomeRaiseDate}</Text>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        )}
 
         {/* Menu Items */}
         <Box className="bg-white rounded-xl shadow-sm mb-6 border border-gray-100">
@@ -127,20 +171,6 @@ const ProfilePage: FC = () => {
             <Icon icon="zi-chevron-right" className="text-gray-400" />
           </Box>
           
-          {currentUser.role === 'admin' && (
-             <Box 
-               className="flex items-center justify-between p-4 border-b border-gray-100 active:bg-gray-50"
-               onClick={() => navigate("/admin-settings")}
-             >
-               <Box className="flex items-center space-x-3">
-                 <Box className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center">
-                   <Icon icon="zi-setting" className="text-purple-500" size={18} />
-                 </Box>
-                 <Text className="text-purple-700 font-bold">Quản trị Phân quyền</Text>
-               </Box>
-               <Icon icon="zi-chevron-right" className="text-purple-400" />
-             </Box>
-          )}
         </Box>
         
         <Button fullWidth variant="secondary" className="!bg-red-50 !text-red-600 border border-red-200" onClick={handleLogout}>

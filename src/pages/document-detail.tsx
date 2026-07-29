@@ -1394,6 +1394,7 @@ const DocumentDetail: React.FC = () => {
                     .map(u => (
                       <Checkbox
                         key={u.id}
+                        value={u.id}
                         label={`${u.name} - ${departments.find(d => d.id === u.departmentId)?.name || ''}`}
                         checked={assignTargetUserIds.includes(u.id)}
                         onChange={(e) => {

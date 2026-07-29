@@ -1,15 +1,41 @@
 export type DocumentStatus = 'pending' | 'warning' | 'waiting' | 'overdue' | 'completed' | 'deleted' | 'info';
 
-export type UserRole = 'van_thu' | 'giam_doc' | 'pho_giam_doc' | 'truong_ban' | 'chuyen_vien' | 'admin';
+export type UserRole = 'guest' | 'van_thu' | 'giam_doc' | 'pho_giam_doc' | 'truong_ban' | 'chuyen_vien' | 'admin';
 export type DepartmentId = 'ban_giam_doc' | 'van_thu' | 'tchc' | 'khtc' | 'ptht' | 'htdv' | 'ksnb';
+export type UserStatus = 'pending_approval' | 'active' | 'inactive';
 
 export interface User {
   id: string;
   name: string;
+  avatar?: string;
   email?: string;
   role: UserRole;
   jobTitle?: string;
   departmentId: DepartmentId;
+  
+  // Auth and HR specific fields
+  status?: UserStatus;
+  profileId?: string; // Linked HR Profile ID
+}
+
+export interface UserProfile {
+  id: string;
+  employeeCode: string; // Mã viên chức
+  fullName: string;
+  dob: string; // Ngày sinh
+  phone: string; // Định dạng 0xxx xxx xxx
+  email: string; // @mst.gov.vn
+  jobTitle: string; // Chức vụ
+  professionalTitle: string; // Chức danh (CVCC, CVC)
+  departmentId: DepartmentId;
+
+  // Salary and extra income
+  salaryCoefficient: number; // HSL
+  nextSalaryRaiseDate: string; // Ngày lên lương (DD/MM/YYYY)
+  salaryRaiseDecision: string; // Quyết định số
+  
+  extraIncomeCoefficient: number; // HSTNTT
+  nextExtraIncomeRaiseDate: string; // Ngày lên bậc TNTT (DD/MM/YYYY)
 }
 
 export type DocumentType = 'external_in' | 'internal_cross' | 'internal_submit';

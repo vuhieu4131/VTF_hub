@@ -170,3 +170,8 @@ export const statisticsPermissionsState = atom<Record<string, UserStatisticsPerm
   default: {},
 });
 
+export const allowedScheduleManagersState = atom<string[]>({
+  key: "allowedScheduleManagers",
+  default: [],
+});
+

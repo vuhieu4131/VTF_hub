@@ -42,6 +42,14 @@ body {
 
 .zaui-btn-primary,
 .zaui-btn-primary.zaui-btn-highlight,
+.zaui-radio-checked .zaui-radio-checkmark::after {
+  display: none !important;
+}
+
+@import "./scrollbar.css";
+
+.zaui-btn-primary,
+.zaui-btn-primary.zaui-btn-highlight,
 .zaui-radio-checked .zaui-radio-checkmark,
 .zaui-btn-primary:active,
 .zaui-btn-primary.zaui-btn-highlight:active,
