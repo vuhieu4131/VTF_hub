@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Page, Header, Box, Text, Input, Button, Select } from "zmp-ui";
+import { useRecoilValueLoadable } from "recoil";
+import { userState } from "../state";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -11,6 +13,7 @@ const Register: React.FC = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const userLoadable = useRecoilValueLoadable(userState);
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
@@ -24,10 +27,13 @@ const Register: React.FC = () => {
       const user = userCredential.user;
 
       // Save initial pending profile info to Firestore
+      const zaloAvatar = userLoadable.state === 'hasValue' ? userLoadable.contents.avatar : '';
+      
       await setDoc(doc(db, "users", user.uid), {
         id: user.uid,
         name,
         email,
+        avatar: zaloAvatar,
         role: 'guest',
         status: 'pending_approval'
       });
@@ -67,8 +73,7 @@ const Register: React.FC = () => {
           </Box>
           <Box>
             <Text className="text-sm text-gray-600 mb-1">Mật khẩu</Text>
-            <Input
-              type="password"
+            <Input.Password
               placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -79,9 +84,12 @@ const Register: React.FC = () => {
           </Box>
           
           
-          <Button fullWidth className="!bg-blue-600 text-white mt-6" onClick={handleRegister}>
+          <button 
+            className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium active:bg-blue-700 transition-colors shadow-sm mt-6" 
+            onClick={handleRegister}
+          >
             Đăng ký
-          </Button>
+          </button>
           
           <Box className="mt-4 text-center">
             <Text className="text-sm text-gray-500">Đã có tài khoản?</Text>

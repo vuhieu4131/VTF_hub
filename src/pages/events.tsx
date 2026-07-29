@@ -1,20 +1,26 @@
 import React, { useState, useEffect } from "react";
 import { Page, Header, Box, Text, Button, Modal, Input, List } from "zmp-ui";
-import { collection, onSnapshot, doc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { AgencyEvent, Feedback } from "../types/event";
 import { UserProfile } from "../types/document";
+import { currentUserState, allowedEventManagersState } from "../state";
+import { useLocation } from "react-router-dom";
 import { useRecoilValue } from "recoil";
-import { currentUserState } from "../state";
 
 const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<AgencyEvent[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const currentUser = useRecoilValue(currentUserState);
+  const allowedEventManagers = useRecoilValue(allowedEventManagersState);
+  
+  const [isEventModalVisible, setEventModalVisible] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<Partial<AgencyEvent>>({});
   
   const [isFeedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [feedbackContent, setFeedbackContent] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const unsubEvents = onSnapshot(collection(db, "events"), (snapshot) => {
@@ -35,6 +41,14 @@ const EventsPage: React.FC = () => {
       unsubProfiles();
     };
   }, []);
+
+  const canCreateEvent = currentUser?.role === 'admin' || currentUser?.role === 'giam_doc' || currentUser?.role === 'pho_giam_doc' || allowedEventManagers.includes(currentUser?.id || '');
+
+  useEffect(() => {
+    if (location.search.includes('action=create') && canCreateEvent) {
+      openCreateEvent();
+    }
+  }, [location.search, canCreateEvent]);
 
   // Calculate upcoming birthdays
   const getUpcomingBirthdays = () => {
@@ -88,6 +102,43 @@ const EventsPage: React.FC = () => {
     }
   };
 
+  const handleSaveEvent = async () => {
+    if (!editingEvent.title || !editingEvent.date) {
+      alert("Vui lòng nhập tiêu đề và ngày diễn ra");
+      return;
+    }
+    try {
+      const id = editingEvent.id || Date.now().toString();
+      await setDoc(doc(db, "events", id), {
+        ...editingEvent,
+        id,
+        creatorId: currentUser?.id || 'admin',
+        createdAt: editingEvent.createdAt || new Date().toISOString()
+      });
+      setEventModalVisible(false);
+    } catch (e: any) {
+      alert("Lỗi: " + e.message);
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (confirm("Bạn có chắc chắn muốn xóa sự kiện này?")) {
+      await deleteDoc(doc(db, "events", id));
+    }
+  };
+
+  const openEditEvent = (e: AgencyEvent) => {
+    setEditingEvent(e);
+    setEventModalVisible(true);
+  };
+
+  const openCreateEvent = () => {
+    setEditingEvent({
+      id: '', title: '', description: '', date: '', type: 'announcement'
+    });
+    setEventModalVisible(true);
+  };
+
   return (
     <Page className="bg-gray-50 flex flex-col h-full">
       <Header title="Sự kiện & Bảng tin" showBackIcon={false} />
@@ -96,7 +147,12 @@ const EventsPage: React.FC = () => {
         
         {/* Events */}
         <Box>
-          <Text className="font-bold text-gray-800 text-lg mb-3">Sự kiện cơ quan</Text>
+          <Box className="flex justify-between items-center mb-3">
+            <Text className="font-bold text-gray-800 text-lg">Sự kiện cơ quan</Text>
+            {canCreateEvent && (
+              <Button size="small" onClick={openCreateEvent}>+ Tạo sự kiện</Button>
+            )}
+          </Box>
           {events.length === 0 ? (
              <Text className="text-gray-500 italic text-sm bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                Không có sự kiện nào sắp diễn ra.
@@ -106,10 +162,18 @@ const EventsPage: React.FC = () => {
                {events.map(e => (
                  <Box key={e.id} className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500">
                     <Box className="flex justify-between items-start mb-1">
-                      <Text className="font-bold text-blue-800">{e.title}</Text>
-                      <Text className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{e.date}</Text>
+                      <Box>
+                        <Text className="font-bold text-blue-800">{e.title}</Text>
+                        <Text className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block mt-1">{e.date}</Text>
+                      </Box>
+                      {canCreateEvent && (
+                        <Box className="flex space-x-2">
+                           <Text className="text-blue-500 text-xs cursor-pointer" onClick={() => openEditEvent(e)}>Sửa</Text>
+                           <Text className="text-red-500 text-xs cursor-pointer" onClick={() => handleDeleteEvent(e.id)}>Xóa</Text>
+                        </Box>
+                      )}
                     </Box>
-                    <Text className="text-sm text-gray-600">{e.description}</Text>
+                    <Text className="text-sm text-gray-600 mt-2">{e.description}</Text>
                  </Box>
                ))}
              </Box>
@@ -177,6 +241,43 @@ const EventsPage: React.FC = () => {
           >
             <input type="checkbox" checked={isAnonymous} readOnly className="w-4 h-4" />
             <Text className="text-sm text-gray-700">Gửi ẩn danh</Text>
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Modal Sự kiện */}
+      <Modal
+        visible={isEventModalVisible}
+        title={editingEvent.id ? "Sửa Sự kiện" : "Tạo Sự kiện mới"}
+        onClose={() => setEventModalVisible(false)}
+        actions={[
+          { text: "Hủy", close: true },
+          { text: "Lưu", highLight: true, onClick: handleSaveEvent }
+        ]}
+      >
+        <Box className="p-4 space-y-4">
+          <Box>
+            <Text className="text-sm font-medium mb-1">Tiêu đề *</Text>
+            <Input 
+              value={editingEvent.title} 
+              onChange={(e) => setEditingEvent({...editingEvent, title: e.target.value})} 
+            />
+          </Box>
+          <Box>
+            <Text className="text-sm font-medium mb-1">Ngày diễn ra * (YYYY-MM-DD)</Text>
+            <Input 
+              type="date"
+              value={editingEvent.date} 
+              onChange={(e) => setEditingEvent({...editingEvent, date: e.target.value})} 
+            />
+          </Box>
+          <Box>
+            <Text className="text-sm font-medium mb-1">Nội dung chi tiết</Text>
+            <Input.TextArea 
+              rows={4}
+              value={editingEvent.description} 
+              onChange={(e) => setEditingEvent({...editingEvent, description: e.target.value})} 
+            />
           </Box>
         </Box>
       </Modal>

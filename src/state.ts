@@ -1,6 +1,6 @@
 import { atom, selector } from "recoil";
 import { getUserInfo } from "zmp-sdk";
-import { Document, DocumentStatus, User, UserRole, DepartmentId } from "types/document";
+import { Document, DocumentStatus, User, UserRole, DepartmentId, CustomPermission } from "types/document";
 import { getBranchStatus } from "./utils/workflow";
 import documents from "../mock/documents.json";
 
@@ -170,8 +170,34 @@ export const statisticsPermissionsState = atom<Record<string, UserStatisticsPerm
   default: {},
 });
 
-export const allowedScheduleManagersState = atom<string[]>({
-  key: "allowedScheduleManagers",
+export const customPermissionsState = atom<CustomPermission[]>({
+  key: "customPermissions",
   default: [],
 });
 
+export const allowedScheduleManagersState = selector<string[]>({
+  key: "allowedScheduleManagers",
+  get: ({ get }) => {
+    const perms = get(customPermissionsState);
+    const schedulePerm = perms.find(p => p.id === 'schedule');
+    return schedulePerm ? schedulePerm.allowedUserIds : [];
+  },
+});
+
+export const allowedEventManagersState = selector<string[]>({
+  key: "allowedEventManagersState",
+  get: ({ get }) => {
+    const customPermissions = get(customPermissionsState);
+    const eventPerm = customPermissions.find(p => p.id === 'events');
+    return eventPerm?.allowedUserIds || [];
+  },
+});
+
+export const allowedLeaveManagersState = selector<string[]>({
+  key: "allowedLeaveManagersState",
+  get: ({ get }) => {
+    const customPermissions = get(customPermissionsState);
+    const leavePerm = customPermissions.find(p => p.id === 'leave');
+    return leavePerm?.allowedUserIds || [];
+  },
+});

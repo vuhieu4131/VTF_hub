@@ -1,8 +1,8 @@
 import React, { useEffect } from "react";
-import { useSetRecoilState } from "recoil";
-import { documentListState, currentUserState, userListState, statisticsPermissionsState, allowedScheduleManagersState } from "../state";
+import { useSetRecoilState, useRecoilValueLoadable } from "recoil";
+import { documentListState, currentUserState, userListState, statisticsPermissionsState, customPermissionsState, userState } from "../state";
 import { db, auth } from "../firebase";
-import { collection, onSnapshot, query, orderBy, doc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, doc, getDoc, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { Document, User } from "../types/document";
 
@@ -11,13 +11,14 @@ export const FirebaseSync: React.FC = () => {
   const setCurrentUser = useSetRecoilState(currentUserState);
   const setUserList = useSetRecoilState(userListState);
   const setStatsPermissions = useSetRecoilState(statisticsPermissionsState);
-  const setAllowedScheduleManagers = useSetRecoilState(allowedScheduleManagersState);
+  const setCustomPermissions = useSetRecoilState(customPermissionsState);
+  const userLoadable = useRecoilValueLoadable(userState);
 
   useEffect(() => {
     let unsubscribeDocs: () => void;
     let unsubscribeUsers: () => void;
     let unsubscribeSettings: () => void;
-    let unsubscribeSchedule: () => void;
+    let unsubscribePermissions: () => void;
 
     // Sync Auth State
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -25,7 +26,12 @@ export const FirebaseSync: React.FC = () => {
         // Fetch user profile from Firestore
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
-          setCurrentUser(userDoc.data() as User);
+          const userData = userDoc.data() as User;
+          if (!userData.avatar && userLoadable.state === 'hasValue' && userLoadable.contents.avatar) {
+            userData.avatar = userLoadable.contents.avatar;
+            updateDoc(userDoc.ref, { avatar: userData.avatar }).catch(e => console.error(e));
+          }
+          setCurrentUser(userData);
         } else {
           setCurrentUser(null);
         }
@@ -60,11 +66,15 @@ export const FirebaseSync: React.FC = () => {
            }
         });
 
-        unsubscribeSchedule = onSnapshot(doc(db, "settings", "schedulePermissions"), (doc) => {
-           if (doc.exists() && doc.data().allowedManagers) {
-              setAllowedScheduleManagers(doc.data().allowedManagers);
+        unsubscribePermissions = onSnapshot(doc(db, "settings", "customPermissions"), (doc) => {
+           if (doc.exists() && doc.data().permissions) {
+              setCustomPermissions(doc.data().permissions);
            } else {
-              setAllowedScheduleManagers([]);
+              setCustomPermissions([
+                { id: 'schedule', name: 'Quyền lên lịch', allowedUserIds: [], isSystem: true },
+                { id: 'events', name: 'Quyền tạo sự kiện (Thông báo)', allowedUserIds: [], isSystem: true },
+                { id: 'leave', name: 'Quyền cập nhật nghỉ phép', allowedUserIds: [], isSystem: true }
+              ]);
            }
         });
 
@@ -73,12 +83,12 @@ export const FirebaseSync: React.FC = () => {
         setDocs([]);
         setUserList([]);
         setStatsPermissions({});
-        setAllowedScheduleManagers([]);
+        setCustomPermissions([]);
         // Stop syncing if logged out
         if (unsubscribeDocs) unsubscribeDocs();
         if (unsubscribeUsers) unsubscribeUsers();
         if (unsubscribeSettings) unsubscribeSettings();
-        if (unsubscribeSchedule) unsubscribeSchedule();
+        if (unsubscribePermissions) unsubscribePermissions();
       }
     });
 
@@ -87,7 +97,7 @@ export const FirebaseSync: React.FC = () => {
       if (unsubscribeDocs) unsubscribeDocs();
       if (unsubscribeUsers) unsubscribeUsers();
       if (unsubscribeSettings) unsubscribeSettings();
-      if (unsubscribeSchedule) unsubscribeSchedule();
+      if (unsubscribePermissions) unsubscribePermissions();
     };
   }, [setDocs, setCurrentUser, setUserList]);
 

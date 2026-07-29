@@ -1,3 +1,10 @@
+export interface CustomPermission {
+  id: string; // e.g., 'schedule', 'events', or custom UUID
+  name: string; // e.g., 'Quyền lên lịch', 'Quyền tạo sự kiện (Thông báo)'
+  allowedUserIds: string[];
+  isSystem?: boolean; // If true, cannot be deleted
+}
+
 export type DocumentStatus = 'pending' | 'warning' | 'waiting' | 'overdue' | 'completed' | 'deleted' | 'info';
 
 export type UserRole = 'guest' | 'van_thu' | 'giam_doc' | 'pho_giam_doc' | 'truong_ban' | 'chuyen_vien' | 'admin';

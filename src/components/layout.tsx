@@ -12,6 +12,7 @@ import EventsPage from "pages/events";
 import LoginPage from "pages/login";
 import RegisterPage from "pages/register";
 import AdminSettingsPage from "pages/admin-settings";
+import NotificationsPage from "pages/notifications";
 import PendingApprovalPage from "pages/pending-approval";
 import { getSystemInfo } from "zmp-sdk";
 import { ScrollRestoration } from "./scroll-restoration";
@@ -53,6 +54,7 @@ export const Layout: FC = () => {
                 <Route path="/create" element={<CreatePage />}></Route>
                 <Route path="/document-detail" element={<DocumentDetailPage />}></Route>
                 <Route path="/profile" element={<ProfilePage />}></Route>
+                <Route path="/notifications" element={<NotificationsPage />}></Route>
                 <Route path="/admin-settings" element={<AdminSettingsPage />}></Route>
               </>
             )

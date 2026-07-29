@@ -58,17 +58,19 @@ const Login: React.FC = () => {
             </Box>
             <Box>
               <Text className="text-sm text-gray-600 mb-1">Mật khẩu</Text>
-              <Input
-                type="password"
+              <Input.Password
                 placeholder="Nhập mật khẩu"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </Box>
             
-            <Button fullWidth className="!bg-blue-600 text-white mt-4" onClick={handleLogin}>
+            <button 
+              className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium active:bg-blue-700 transition-colors shadow-sm mt-4" 
+              onClick={handleLogin}
+            >
               Đăng nhập
-            </Button>
+            </button>
           </Box>
           
           <Box className="mt-4 text-center">
