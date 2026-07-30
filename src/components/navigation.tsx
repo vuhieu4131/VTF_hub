@@ -1,19 +1,21 @@
 import { useVirtualKeyboardVisible } from "hooks";
-import React, { FC, useMemo } from "react";
+import React, { FC, useMemo, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { MenuItem } from "types/menu";
 import { BottomNavigation, Icon } from "zmp-ui";
 import { useRecoilValue } from "recoil";
-import { currentUserState } from "../state";
+import { currentUserState, allowedScheduleManagersState } from "../state";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "../firebase";
 
 const tabs: Record<string, MenuItem> = {
   "/": {
     label: "Lịch làm việc",
     icon: <Icon icon="zi-calendar" />,
   },
-  "/events": {
-    label: "Sự kiện",
-    icon: <Icon icon="zi-star" />,
+  "/diary": {
+    label: "Nhật ký",
+    icon: <Icon icon="zi-edit-text" />,
   },
   "/documents": {
     label: "Văn bản",
@@ -41,6 +43,24 @@ export const Navigation: FC = () => {
   const keyboardVisible = useVirtualKeyboardVisible();
   const navigate = useNavigate();
   const location = useLocation();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const currentUser = useRecoilValue(currentUserState);
+  const allowedScheduleManagers = useRecoilValue(allowedScheduleManagersState);
+
+  useEffect(() => {
+    const canEditSchedule = currentUser?.role === 'admin' || allowedScheduleManagers.includes(currentUser?.id || '');
+    if (!canEditSchedule) return;
+
+    const unsub = onSnapshot(collection(db, "schedules"), (snapshot) => {
+      let count = 0;
+      snapshot.forEach(d => {
+        if (d.data().status === 'pending') count++;
+      });
+      setPendingCount(count);
+    });
+    return () => unsub();
+  }, [currentUser, allowedScheduleManagers]);
 
   const noBottomNav = useMemo(() => {
     return NO_BOTTOM_NAVIGATION_PAGES.includes(location.pathname);
@@ -49,8 +69,6 @@ export const Navigation: FC = () => {
   if (noBottomNav || keyboardVisible) {
     return <></>;
   }
-
-  const currentUser = useRecoilValue(currentUserState);
 
   const filteredTabs = Object.keys(tabs).filter(path => {
     if (path === '/admin-settings' && currentUser?.role !== 'admin') return false;
@@ -65,13 +83,27 @@ export const Navigation: FC = () => {
       onChange={navigate}
       className="z-50 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] border-t-0"
     >
-      {filteredTabs.map((path: string) => (
-        <BottomNavigation.Item
-          key={path}
-          label={tabs[path].label}
-          icon={tabs[path].icon}
-        />
-      ))}
+      {filteredTabs.map((path: string) => {
+        const isNotifTab = path === '/notifications';
+        const hasNotifs = isNotifTab && pendingCount > 0;
+        
+        return (
+          <BottomNavigation.Item
+            key={path}
+            label={tabs[path].label}
+            icon={
+              hasNotifs ? (
+                <div className="relative inline-block">
+                  {tabs[path].icon}
+                  <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></div>
+                </div>
+              ) : (
+                tabs[path].icon
+              )
+            }
+          />
+        );
+      })}
     </BottomNavigation>
   );
 };

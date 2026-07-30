@@ -75,7 +75,9 @@ export const PermissionsManager: React.FC = () => {
           <Box className="flex justify-between items-start mb-2">
             <Text className="font-bold text-blue-800">{perm.name}</Text>
             {!perm.isSystem && (
-              <Icon icon="zi-delete" className="text-red-500 cursor-pointer" onClick={() => handleDeletePermission(perm.id)} />
+              <Box className="cursor-pointer" onClick={() => handleDeletePermission(perm.id)}>
+                <Icon icon="zi-delete" className="text-red-500" />
+              </Box>
             )}
           </Box>
           <Text className="text-xs text-gray-500 mb-3">

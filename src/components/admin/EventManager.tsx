@@ -19,15 +19,15 @@ export const EventManager: React.FC = () => {
         data.push({ id: d.id, ...d.data() } as AgencyEvent);
       });
       // sort by date desc
-      data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      data.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
       setEvents(data);
     });
     return () => unsub();
   }, []);
 
   const handleSave = async () => {
-    if (!editingEvent.title || !editingEvent.date) {
-      alert("Vui lòng nhập tiêu đề và ngày diễn ra");
+    if (!editingEvent.title || !editingEvent.description) {
+      alert("Vui lòng nhập Tên thông báo và Nội dung");
       return;
     }
 
@@ -46,7 +46,7 @@ export const EventManager: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Bạn có chắc chắn muốn xóa sự kiện này?")) {
+    if (confirm("Bạn có chắc chắn muốn xóa thông báo này?")) {
       await deleteDoc(doc(db, "events", id));
     }
   };
@@ -57,8 +57,9 @@ export const EventManager: React.FC = () => {
   };
 
   const openCreate = () => {
+    const today = new Date().toISOString().split('T')[0];
     setEditingEvent({
-      id: '', title: '', description: '', date: '', type: 'announcement'
+      id: '', title: '', description: '', date: today, type: 'announcement'
     });
     setModalVisible(true);
   };
@@ -66,7 +67,7 @@ export const EventManager: React.FC = () => {
   return (
     <Box className="flex flex-col h-full bg-gray-50">
       <Box className="p-4 bg-white border-b border-gray-200 flex justify-between items-center">
-        <Text className="font-medium">Tổng số: {events.length} sự kiện</Text>
+        <Text className="font-medium">Tổng số: {events.length} thông báo</Text>
         <Button size="small" onClick={openCreate} prefixIcon={<Icon icon="zi-plus" />}>Tạo mới</Button>
       </Box>
 
@@ -77,7 +78,7 @@ export const EventManager: React.FC = () => {
               <Box className="flex justify-between items-start mb-2">
                 <Box>
                   <Text className="font-bold text-gray-800">{e.title}</Text>
-                  <Text className="text-sm text-gray-500">Ngày: {e.date} | Loại: {e.type === 'anniversary' ? 'Kỷ niệm' : 'Thông báo'}</Text>
+                  <Text className="text-sm text-gray-500">Loại: Thông báo chung</Text>
                 </Box>
                 <Box flex>
                   <Button size="small" variant="tertiary" onClick={() => openEdit(e)}>Sửa</Button>
@@ -92,7 +93,7 @@ export const EventManager: React.FC = () => {
 
       <Modal
         visible={isModalVisible}
-        title={editingEvent.id ? "Sửa Sự kiện" : "Tạo Sự kiện mới"}
+        title={editingEvent.id ? "Sửa Thông báo" : "Tạo Thông báo mới"}
         onClose={() => setModalVisible(false)}
         actions={[
           { text: "Hủy", close: true },
@@ -100,26 +101,10 @@ export const EventManager: React.FC = () => {
         ]}
       >
         <Box className="p-4 space-y-4">
-          <Input label="Tiêu đề" value={editingEvent.title} onChange={e => setEditingEvent({...editingEvent, title: e.target.value})} />
-          
+          <Input label="Tên thông báo *" value={editingEvent.title} onChange={e => setEditingEvent({...editingEvent, title: e.target.value})} />
           <Box>
-            <Text className="text-sm mb-1 text-gray-600">Loại sự kiện</Text>
-            <Select 
-              value={editingEvent.type} 
-              onChange={v => setEditingEvent({...editingEvent, type: v as any})}
-              closeOnSelect
-            >
-              <Select.Option value="announcement" title="Thông báo chung" />
-              <Select.Option value="anniversary" title="Ngày Kỷ niệm" />
-              <Select.Option value="other" title="Khác" />
-            </Select>
-          </Box>
-
-          <Input label="Ngày diễn ra (YYYY-MM-DD)" value={editingEvent.date} onChange={e => setEditingEvent({...editingEvent, date: e.target.value})} />
-          
-          <Box>
-            <Text className="text-sm mb-1 text-gray-600">Nội dung chi tiết</Text>
-            <Input.TextArea value={editingEvent.description} onChange={e => setEditingEvent({...editingEvent, description: e.target.value})} />
+            <Text className="text-sm mb-1 text-gray-600">Nội dung *</Text>
+            <Input.TextArea rows={6} value={editingEvent.description} onChange={e => setEditingEvent({...editingEvent, description: e.target.value})} />
           </Box>
         </Box>
       </Modal>

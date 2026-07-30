@@ -7,8 +7,9 @@ import { UserRole } from "../types/document";
 import { departments } from "../constants/departments";
 import { signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth, db } from "../firebase";
-import { collection, getDocs, deleteDoc, doc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { UserProfile } from "../types/document";
+import { Feedback } from "../types/event";
 
 const roleLabels: Record<UserRole, string> = {
   guest: "Khách",
@@ -31,6 +32,10 @@ const ProfilePage: FC = () => {
   const [oldPassword, setOldPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
+
+  const [isFeedbackModalVisible, setFeedbackModalVisible] = React.useState(false);
+  const [feedbackContent, setFeedbackContent] = React.useState("");
+  const [isAnonymous, setIsAnonymous] = React.useState(false);
 
   const [isEditingZalo, setIsEditingZalo] = React.useState(false);
   const [zaloEditForm, setZaloEditForm] = React.useState({ name: '', email: '', avatar: '' });
@@ -104,6 +109,32 @@ const ProfilePage: FC = () => {
         console.error("Lỗi xóa DB:", e);
         alert("Lỗi xóa DB: " + e.message);
       }
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!feedbackContent.trim()) {
+      alert("Vui lòng nhập nội dung góp ý!");
+      return;
+    }
+    
+    try {
+      const id = Date.now().toString();
+      const feedback: Feedback = {
+        id,
+        content: feedbackContent,
+        status: 'new',
+        createdAt: new Date().toISOString(),
+        creatorId: isAnonymous ? undefined : currentUser?.id,
+        creatorName: isAnonymous ? undefined : currentUser?.name
+      };
+      
+      await setDoc(doc(db, "feedbacks", id), feedback);
+      alert("Cảm ơn bạn đã gửi góp ý!");
+      setFeedbackModalVisible(false);
+      setFeedbackContent("");
+    } catch (e: any) {
+      alert("Lỗi: " + e.message);
     }
   };
 
@@ -218,6 +249,15 @@ const ProfilePage: FC = () => {
           </Box>
         </Box>
         
+        {/* Góp ý */}
+        <Box className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center mb-6">
+          <Text className="font-bold text-blue-800 mb-2">Hòm thư Góp ý</Text>
+          <Text className="text-sm text-gray-600 mb-4">
+            Bạn có đóng góp hoặc đề xuất gì cho cơ quan? Hãy gửi ý kiến (có thể ẩn danh) cho Admin.
+          </Text>
+          <Button onClick={() => setFeedbackModalVisible(true)} size="small">Gửi Góp ý</Button>
+        </Box>
+
         <Button fullWidth variant="secondary" className="!bg-red-50 !text-red-600 border border-red-200" onClick={handleLogout}>
           Đăng xuất
         </Button>
@@ -418,6 +458,33 @@ const ProfilePage: FC = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
+          </Box>
+        </Box>
+      </Modal>
+
+      {/* Feedback Modal */}
+      <Modal
+        visible={isFeedbackModalVisible}
+        title="Gửi Góp ý"
+        onClose={() => setFeedbackModalVisible(false)}
+        actions={[
+          { text: "Hủy", close: true },
+          { text: "Gửi", highLight: true, onClick: handleSubmitFeedback }
+        ]}
+      >
+        <Box className="p-4 space-y-4">
+          <Input.TextArea 
+            placeholder="Nội dung góp ý của bạn..."
+            value={feedbackContent}
+            onChange={(e) => setFeedbackContent(e.target.value)}
+            rows={4}
+          />
+          <Box 
+            className="flex items-center space-x-2 mt-2 cursor-pointer" 
+            onClick={() => setIsAnonymous(!isAnonymous)}
+          >
+            <input type="checkbox" checked={isAnonymous} readOnly className="w-4 h-4" />
+            <Text className="text-sm text-gray-700">Gửi ẩn danh</Text>
           </Box>
         </Box>
       </Modal>

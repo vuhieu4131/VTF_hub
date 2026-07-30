@@ -22,7 +22,7 @@ const HomePage: React.FC = () => {
   const [isActionSheetVisible, setActionSheetVisible] = useState(false);
   const [isModalVisible, setModalVisible] = useState(false);
   const [isLeaveModalVisible, setLeaveModalVisible] = useState(false);
-  const [isApprovalModalVisible, setApprovalModalVisible] = useState(false);
+
   const users = useRecoilValue(userListState);
   const [isLeaveUserSelectVisible, setLeaveUserSelectVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Partial<ScheduleEvent>>({});
@@ -80,9 +80,11 @@ const HomePage: React.FC = () => {
     });
   };
 
-  const canEditSchedule = currentUser?.role === 'admin' || currentUser?.role === 'giam_doc' || currentUser?.role === 'pho_giam_doc' || allowedScheduleManagers.includes(currentUser?.id || '');
+  const canEditSchedule = currentUser?.role === 'admin' || allowedScheduleManagers.includes(currentUser?.id || '');
   const canEditLeave = currentUser?.role === 'admin' || allowedLeaveManagers.includes(currentUser?.id || '');
-  const canEditEvent = currentUser?.role === 'admin' || currentUser?.role === 'giam_doc' || currentUser?.role === 'pho_giam_doc' || allowedEventManagers.includes(currentUser?.id || '');
+  const canEditEvent = currentUser?.role === 'admin' || allowedEventManagers.includes(currentUser?.id || '');
+  
+  const scheduleManagerNames = users.filter(u => allowedScheduleManagers.includes(u.id)).map(u => u.name).join(', ') || 'Admin';
 
   const handleFabClick = () => {
     const permissionsCount = [canEditSchedule, canEditLeave, canEditEvent].filter(Boolean).length;
@@ -184,19 +186,15 @@ const HomePage: React.FC = () => {
   const d = new Date();
   const todayStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
 
+  const myRequests = events
+    .filter(e => e.creatorId === currentUser?.id && e.status)
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
   return (
     <Page className="bg-gray-100 flex flex-col h-full relative">
       <Header title="Lịch làm việc" showBackIcon={false} />
       
-      {canEditSchedule && pendingEvents.length > 0 && (
-        <Box 
-          className="bg-orange-50 px-4 py-2 flex justify-between items-center border-b border-orange-100 cursor-pointer"
-          onClick={() => setApprovalModalVisible(true)}
-        >
-          <Text className="text-sm font-medium text-orange-800">Có {pendingEvents.length} đề nghị bổ sung lịch chờ duyệt</Text>
-          <Button size="small" variant="secondary" className="!text-orange-600 bg-white shadow-sm border border-orange-200">Duyệt ngay</Button>
-        </Box>
-      )}
+
       
       {/* Sleek Week Selector */}
       <Box className="bg-white px-4 py-3 shadow-sm flex justify-between items-center z-10">
@@ -348,14 +346,19 @@ const HomePage: React.FC = () => {
       {/* Event Modal */}
       <Modal
         visible={isModalVisible}
-        title={editingEvent.id ? "Sửa Lịch" : (canEditSchedule ? "Tạo Lịch làm việc mới" : "Đề nghị bổ sung lịch")}
+        title={editingEvent.id ? (canEditSchedule ? "Sửa Lịch" : "Chi tiết lịch") : (canEditSchedule ? "Tạo Lịch làm việc mới" : "Đề nghị bổ sung lịch")}
         onClose={() => setModalVisible(false)}
         actions={[
-          { text: "Hủy", close: true },
-          { text: canEditSchedule ? "Lưu" : "Gửi Đề nghị", highLight: true, onClick: handleSaveSchedule }
+          { text: canEditSchedule || !editingEvent.id ? "Hủy" : "Đóng", close: true },
+          ...(canEditSchedule || !editingEvent.id ? [{ text: canEditSchedule ? "Lưu" : "Gửi Đề nghị", highLight: true, onClick: handleSaveSchedule }] : [])
         ]}
       >
         <Box className="p-4 space-y-4">
+          {!canEditSchedule && !editingEvent.id && (
+            <Text className="text-sm text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-100 text-center mb-2">
+              Người lên lịch: <strong>{scheduleManagerNames}</strong>
+            </Text>
+          )}
           <Input 
             label="Ngày" 
             type={"date" as any}
@@ -413,6 +416,32 @@ const HomePage: React.FC = () => {
             onChange={e => setEditingEvent({...editingEvent, notes: e.target.value})} 
             disabled={!canEditSchedule && !!editingEvent.id}
           />
+          
+          {!canEditSchedule && !editingEvent.id && (
+             <Box className="mt-4 border-t border-gray-100 pt-4">
+                <Text className="font-bold text-gray-700 mb-3">Lịch sử đề nghị gần đây của bạn</Text>
+                {myRequests.length === 0 ? (
+                  <Text className="text-sm text-gray-500 italic">Chưa có đề nghị nào.</Text>
+                ) : (
+                  <Box className="space-y-3">
+                    {myRequests.slice(0, 5).map(req => (
+                      <Box key={req.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <Box className="flex justify-between items-start mb-2">
+                           <Box>
+                             <Text className="font-semibold text-sm text-gray-800">{req.date}</Text>
+                             <Text className="text-xs text-gray-500">{req.time} ({req.session})</Text>
+                           </Box>
+                           <Text className={`text-[10px] px-2 py-1 rounded-full font-medium ${req.status === 'approved' ? 'bg-green-100 text-green-700' : req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+                             {req.status === 'approved' ? 'Đã duyệt' : req.status === 'rejected' ? 'Từ chối' : 'Đang chờ'}
+                           </Text>
+                        </Box>
+                        <Text className="text-sm text-gray-700 line-clamp-2">{req.content}</Text>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+             </Box>
+           )}
         </Box>
       </Modal>
       {/* Modal Chọn loại lịch (Action Sheet) */}
@@ -438,10 +467,13 @@ const HomePage: React.FC = () => {
           )}
           {canEditEvent && (
             <div 
-              onClick={() => { setActionSheetVisible(false); navigate('/events?action=create'); }} 
-              className="w-full bg-purple-50 text-purple-600 font-semibold py-3 px-4 rounded-xl text-center active:bg-purple-100 cursor-pointer border border-purple-200"
+              onClick={() => {
+                navigate('/events?action=create');
+                setActionSheetVisible(false);
+              }} 
+              className="w-full bg-blue-50 text-blue-700 font-semibold py-3 px-4 rounded-xl text-center active:bg-blue-100 cursor-pointer shadow-sm border border-blue-100"
             >
-              📢 Tạo sự kiện / Bảng tin
+              📢 Tạo thông báo
             </div>
           )}
         </Box>
@@ -450,11 +482,11 @@ const HomePage: React.FC = () => {
       {/* Modal Nghỉ phép */}
       <Modal
         visible={isLeaveModalVisible}
-        title={editingEvent.id ? "Sửa Báo nghỉ phép" : "Báo nghỉ phép / Công tác"}
+        title={editingEvent.id ? (canEditLeave ? "Sửa Báo nghỉ phép" : "Chi tiết Báo nghỉ phép") : "Báo nghỉ phép / Công tác"}
         onClose={() => setLeaveModalVisible(false)}
         actions={[
-          { text: "Hủy", close: true },
-          { text: "Lưu", highLight: true, onClick: handleSaveLeave }
+          { text: canEditLeave || !editingEvent.id ? "Hủy" : "Đóng", close: true },
+          ...(canEditLeave || !editingEvent.id ? [{ text: "Lưu", highLight: true, onClick: handleSaveLeave }] : [])
         ]}
       >
         <Box className="p-4 space-y-4">
@@ -465,6 +497,7 @@ const HomePage: React.FC = () => {
                 type={"date" as any}
                 value={editingEvent.date} 
                 onChange={e => setEditingEvent({...editingEvent, date: e.target.value})} 
+                disabled={!canEditLeave && !!editingEvent.id}
               />
             </Box>
             <Box className="flex-1">
@@ -473,6 +506,7 @@ const HomePage: React.FC = () => {
                 type={"date" as any}
                 value={editingEvent.endDate || editingEvent.date} 
                 onChange={e => setEditingEvent({...editingEvent, endDate: e.target.value})} 
+                disabled={!canEditLeave && !!editingEvent.id}
               />
             </Box>
           </Box>
@@ -482,6 +516,7 @@ const HomePage: React.FC = () => {
               value={editingEvent.session} 
               onChange={v => setEditingEvent({...editingEvent, session: v as ScheduleSession})} 
               closeOnSelect
+              disabled={!canEditLeave && !!editingEvent.id}
             >
               <Select.Option value="Sáng" title="Sáng" />
               <Select.Option value="Chiều" title="Chiều" />
@@ -491,8 +526,12 @@ const HomePage: React.FC = () => {
           <Box>
             <Text className="text-sm mb-1 text-gray-600">Tên cán bộ nghỉ</Text>
             <Box 
-              className="border border-gray-300 rounded-lg p-2.5 bg-gray-50 flex justify-between items-center cursor-pointer"
-              onClick={() => setLeaveUserSelectVisible(true)}
+              className={`border border-gray-300 rounded-lg p-2.5 bg-gray-50 flex justify-between items-center ${canEditLeave || !editingEvent.id ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
+              onClick={() => {
+                if (canEditLeave || !editingEvent.id) {
+                  setLeaveUserSelectVisible(true);
+                }
+              }}
             >
               <Text className={`text-sm line-clamp-1 ${editingEvent.participantUserIds?.length ? 'text-gray-800' : 'text-gray-400'}`}>
                 {editingEvent.participantUserIds?.length 
@@ -506,6 +545,7 @@ const HomePage: React.FC = () => {
             value={editingEvent.notes || ''} 
             onChange={e => setEditingEvent({...editingEvent, notes: e.target.value})} 
             placeholder="VD: Nghỉ phép năm, Đi công tác Hà Nội..."
+            disabled={!canEditLeave && !!editingEvent.id}
           />
         </Box>
       </Modal>
@@ -518,11 +558,7 @@ const HomePage: React.FC = () => {
         title="Chọn cán bộ nghỉ"
       />
 
-      <ScheduleApprovalModal 
-        visible={isApprovalModalVisible}
-        onClose={() => setApprovalModalVisible(false)}
-        pendingEvents={pendingEvents}
-      />
+
     </Page>
   );
 };

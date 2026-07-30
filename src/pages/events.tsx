@@ -26,8 +26,8 @@ const EventsPage: React.FC = () => {
     const unsubEvents = onSnapshot(collection(db, "events"), (snapshot) => {
       const data: AgencyEvent[] = [];
       snapshot.forEach(d => data.push({ id: d.id, ...d.data() } as AgencyEvent));
-      data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      setEvents(data.filter(e => new Date(e.date).getTime() >= new Date().setHours(0,0,0,0))); // Only future events
+      data.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+      setEvents(data);
     });
 
     const unsubProfiles = onSnapshot(collection(db, "profiles"), (snapshot) => {
@@ -42,7 +42,7 @@ const EventsPage: React.FC = () => {
     };
   }, []);
 
-  const canCreateEvent = currentUser?.role === 'admin' || currentUser?.role === 'giam_doc' || currentUser?.role === 'pho_giam_doc' || allowedEventManagers.includes(currentUser?.id || '');
+  const canCreateEvent = currentUser?.role === 'admin' || allowedEventManagers.includes(currentUser?.id || '');
 
   useEffect(() => {
     if (location.search.includes('action=create') && canCreateEvent) {
@@ -103,8 +103,8 @@ const EventsPage: React.FC = () => {
   };
 
   const handleSaveEvent = async () => {
-    if (!editingEvent.title || !editingEvent.date) {
-      alert("Vui lòng nhập tiêu đề và ngày diễn ra");
+    if (!editingEvent.title || !editingEvent.description) {
+      alert("Vui lòng nhập Tên thông báo và Nội dung");
       return;
     }
     try {
@@ -122,7 +122,7 @@ const EventsPage: React.FC = () => {
   };
 
   const handleDeleteEvent = async (id: string) => {
-    if (confirm("Bạn có chắc chắn muốn xóa sự kiện này?")) {
+    if (confirm("Bạn có chắc chắn muốn xóa thông báo này?")) {
       await deleteDoc(doc(db, "events", id));
     }
   };
@@ -133,29 +133,30 @@ const EventsPage: React.FC = () => {
   };
 
   const openCreateEvent = () => {
+    const today = new Date().toISOString().split('T')[0];
     setEditingEvent({
-      id: '', title: '', description: '', date: '', type: 'announcement'
+      id: '', title: '', description: '', date: today, type: 'announcement'
     });
     setEventModalVisible(true);
   };
 
   return (
     <Page className="bg-gray-50 flex flex-col h-full">
-      <Header title="Sự kiện & Bảng tin" showBackIcon={false} />
+      <Header title="Thông báo & Bảng tin" showBackIcon={false} />
       
       <Box className="flex-1 overflow-y-auto p-4 space-y-6 pb-24">
         
         {/* Events */}
         <Box>
           <Box className="flex justify-between items-center mb-3">
-            <Text className="font-bold text-gray-800 text-lg">Sự kiện cơ quan</Text>
+            <Text className="font-bold text-gray-800 text-lg">Thông báo chung</Text>
             {canCreateEvent && (
-              <Button size="small" onClick={openCreateEvent}>+ Tạo sự kiện</Button>
+              <Button size="small" onClick={openCreateEvent}>+ Tạo thông báo</Button>
             )}
           </Box>
           {events.length === 0 ? (
              <Text className="text-gray-500 italic text-sm bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-               Không có sự kiện nào sắp diễn ra.
+               Không có thông báo nào.
              </Text>
           ) : (
              <Box className="space-y-3">
@@ -245,10 +246,10 @@ const EventsPage: React.FC = () => {
         </Box>
       </Modal>
 
-      {/* Modal Sự kiện */}
+      {/* Modal Thông báo */}
       <Modal
         visible={isEventModalVisible}
-        title={editingEvent.id ? "Sửa Sự kiện" : "Tạo Sự kiện mới"}
+        title={editingEvent.id ? "Sửa Thông báo" : "Tạo Thông báo mới"}
         onClose={() => setEventModalVisible(false)}
         actions={[
           { text: "Hủy", close: true },
@@ -257,24 +258,16 @@ const EventsPage: React.FC = () => {
       >
         <Box className="p-4 space-y-4">
           <Box>
-            <Text className="text-sm font-medium mb-1">Tiêu đề *</Text>
+            <Text className="text-sm font-medium mb-1">Tên thông báo *</Text>
             <Input 
               value={editingEvent.title} 
               onChange={(e) => setEditingEvent({...editingEvent, title: e.target.value})} 
             />
           </Box>
           <Box>
-            <Text className="text-sm font-medium mb-1">Ngày diễn ra * (YYYY-MM-DD)</Text>
-            <Input 
-              type="date"
-              value={editingEvent.date} 
-              onChange={(e) => setEditingEvent({...editingEvent, date: e.target.value})} 
-            />
-          </Box>
-          <Box>
-            <Text className="text-sm font-medium mb-1">Nội dung chi tiết</Text>
+            <Text className="text-sm font-medium mb-1">Nội dung *</Text>
             <Input.TextArea 
-              rows={4}
+              rows={6}
               value={editingEvent.description} 
               onChange={(e) => setEditingEvent({...editingEvent, description: e.target.value})} 
             />

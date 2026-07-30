@@ -3,6 +3,8 @@ import { Box, Text, Button, Modal, Icon, Input, Select } from "zmp-ui";
 import { ScheduleEvent, ScheduleSession, ScheduleType } from "../types/schedule";
 import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { useRecoilValue } from "recoil";
+import { userListState } from "../state";
 
 const { Option } = Select;
 
@@ -13,6 +15,7 @@ interface Props {
 }
 
 export const ScheduleApprovalModal: React.FC<Props> = ({ visible, onClose, pendingEvents }) => {
+  const users = useRecoilValue(userListState);
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
 
   const handleApprove = async () => {
@@ -53,7 +56,7 @@ export const ScheduleApprovalModal: React.FC<Props> = ({ visible, onClose, pendi
         <Box className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
           <Box>
             <Text className="text-sm font-medium mb-1">Ngày (YYYY-MM-DD)</Text>
-            <Input type="date" value={editingEvent.date} onChange={(e) => setEditingEvent({...editingEvent, date: e.target.value})} />
+            <Input type={"date" as any} value={editingEvent.date} onChange={(e) => setEditingEvent({...editingEvent, date: e.target.value})} />
           </Box>
           <Box className="flex space-x-2">
             <Box className="flex-1">
@@ -81,6 +84,10 @@ export const ScheduleApprovalModal: React.FC<Props> = ({ visible, onClose, pendi
             <Text className="text-sm font-medium mb-1">Địa điểm</Text>
             <Input value={editingEvent.location} onChange={(e) => setEditingEvent({...editingEvent, location: e.target.value})} />
           </Box>
+          <Box>
+            <Text className="text-sm font-medium mb-1">Ghi chú (xe đưa đón...)</Text>
+            <Input value={editingEvent.notes || ""} onChange={(e) => setEditingEvent({...editingEvent, notes: e.target.value})} />
+          </Box>
         </Box>
       </Modal>
     );
@@ -101,7 +108,7 @@ export const ScheduleApprovalModal: React.FC<Props> = ({ visible, onClose, pendi
             <Box key={ev.id} className="bg-orange-50 p-3 rounded-lg border border-orange-100">
               <Text className="font-bold text-orange-800">{ev.date} - {ev.time} ({ev.session})</Text>
               <Text className="text-sm text-gray-700 mt-1 line-clamp-2">{ev.content}</Text>
-              <Text className="text-xs text-gray-500 mt-1 mb-2">Đề xuất bởi: {ev.creatorId}</Text>
+              <Text className="text-xs text-gray-500 mt-1 mb-2">Đề xuất bởi: {users.find(u => u.id === ev.creatorId)?.name || ev.creatorId}</Text>
               <Box className="flex space-x-2">
                 <Button size="small" variant="secondary" className="!text-blue-600 flex-1" onClick={() => setEditingEvent(ev)}>Xem & Sửa</Button>
                 <Button size="small" variant="secondary" className="!text-red-500 flex-1" onClick={() => handleReject(ev.id)}>Từ chối</Button>

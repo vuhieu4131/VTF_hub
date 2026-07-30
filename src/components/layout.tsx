@@ -8,7 +8,7 @@ import StatisticsPage from "pages/statistics";
 import CreatePage from "pages/create";
 import DocumentDetailPage from "pages/document-detail";
 import ProfilePage from "pages/profile";
-import EventsPage from "pages/events";
+import DiaryPage from "pages/diary";
 import LoginPage from "pages/login";
 import RegisterPage from "pages/register";
 import AdminSettingsPage from "pages/admin-settings";
@@ -48,7 +48,7 @@ export const Layout: FC = () => {
             ) : (
               <>
                 <Route path="/" element={<HomePage />}></Route>
-                <Route path="/events" element={<EventsPage />}></Route>
+                <Route path="/diary" element={<DiaryPage />}></Route>
                 <Route path="/documents" element={<DocumentsPage />}></Route>
                 <Route path="/statistics" element={<StatisticsPage />}></Route>
                 <Route path="/create" element={<CreatePage />}></Route>
