@@ -6,6 +6,7 @@ import { useRecoilValue } from "recoil";
 import { currentUserState, userListState } from "../state";
 import { DailyLog } from "../types/diary";
 import { User } from "../types/document";
+import logo from "../static/logo.png";
 
 const countTasks = (text: string) => {
   if (!text) return 0;
@@ -428,6 +429,12 @@ const DiaryPage: React.FC = () => {
   return (
     <Page className="bg-gray-50">
       <Header title="Nhật ký công việc" showBackIcon={false} />
+      <Box 
+        className="fixed right-4 z-[999]" 
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 20px)' }}
+      >
+        <img src={logo} alt="Logo" className="h-20 w-auto object-contain drop-shadow-md animate-spin-y" />
+      </Box>
       
       {isManager ? (
         <Tabs id="diary-tabs" className="bg-white">

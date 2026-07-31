@@ -10,6 +10,7 @@ import { ScheduleApprovalModal } from "../components/ScheduleApprovalModal";
 import { AgencyEvent, Feedback } from "../types/event";
 import { UserProfile } from "../types/document";
 import { useLocation, useNavigate } from "react-router-dom";
+import logo from "../static/logo.png";
 
 const NotificationsPage: React.FC = () => {
   const [pendingEvents, setPendingEvents] = useState<ScheduleEvent[]>([]);
@@ -214,6 +215,12 @@ const NotificationsPage: React.FC = () => {
   return (
     <Page className="bg-gray-50 flex flex-col h-full">
       <Header title="Thông báo" showBackIcon={false} />
+      <Box 
+        className="fixed right-4 z-[999]" 
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 20px)' }}
+      >
+        <img src={logo} alt="Logo" className="h-20 w-auto object-contain drop-shadow-md animate-spin-y" />
+      </Box>
       
       {canCreateEvent && (
         <Box className="bg-white border-b border-gray-200 p-3 flex justify-between items-center shadow-sm z-10 relative">

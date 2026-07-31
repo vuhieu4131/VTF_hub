@@ -13,6 +13,15 @@ module.exports = {
         background: "#ffffff",
         skeleton: "rgba(0, 0, 0, 0.1)",
       },
+      animation: {
+        'spin-y': 'spin-y 4s linear infinite',
+      },
+      keyframes: {
+        'spin-y': {
+          '0%': { transform: 'rotateY(0deg)' },
+          '100%': { transform: 'rotateY(360deg)' },
+        }
+      }
     },
   },
 };

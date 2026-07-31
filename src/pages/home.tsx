@@ -8,6 +8,7 @@ import { currentUserState, allowedScheduleManagersState, allowedLeaveManagersSta
 import { ScheduleApprovalModal } from "../components/ScheduleApprovalModal";
 import { UserSelectModal } from "../components/admin/UserSelectModal";
 import { useNavigate } from "react-router-dom";
+import logo from "../static/logo.png";
 
 const DAYS_OF_WEEK = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
 
@@ -193,6 +194,12 @@ const HomePage: React.FC = () => {
   return (
     <Page className="bg-gray-100 flex flex-col h-full relative">
       <Header title="Lịch làm việc" showBackIcon={false} />
+      <Box 
+        className="fixed right-4 z-[999]" 
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 20px)' }}
+      >
+        <img src={logo} alt="Logo" className="h-20 w-auto object-contain drop-shadow-md animate-spin-y" />
+      </Box>
       
 
       
@@ -220,7 +227,7 @@ const HomePage: React.FC = () => {
 
       {/* Floating Action Button for Adding Event / Proposing Event */}
       <Box 
-        className={`absolute bottom-24 right-4 w-14 h-14 ${canEditSchedule ? 'bg-blue-600' : 'bg-orange-500'} rounded-full shadow-lg flex items-center justify-center z-20 cursor-pointer active:scale-95 transition-transform`}
+        className={`absolute bottom-6 right-4 w-14 h-14 ${canEditSchedule ? 'bg-blue-600' : 'bg-orange-500'} rounded-full shadow-lg flex items-center justify-center z-20 cursor-pointer active:scale-95 transition-transform`}
         onClick={handleFabClick}
       >
         <Icon icon={canEditSchedule ? "zi-plus" : "zi-chat"} className="text-white text-2xl" />

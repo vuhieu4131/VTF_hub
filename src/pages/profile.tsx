@@ -12,6 +12,7 @@ import { ref, listAll, getDownloadURL } from "firebase/storage";
 import { UserProfile } from "../types/document";
 import { FeedbackInbox } from "../components/FeedbackInbox";
 import { checkNextSalaryRaise, checkNextExtraIncomeRaise } from "../utils/date";
+import logo from "../static/logo.png";
 
 const roleLabels: Record<UserRole, string> = {
   guest: "Khách",
@@ -196,13 +197,19 @@ const ProfilePage: FC = () => {
   return (
     <Page className="bg-gray-50 flex flex-col h-full relative">
       <Header showBackIcon={false} title="Cá nhân" />
+      <Box 
+        className="fixed right-4 z-[999]" 
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 20px)' }}
+      >
+        <img src={logo} alt="Logo" className="h-20 w-auto object-contain drop-shadow-md animate-spin-y" />
+      </Box>
       
       <Box className="flex-1 overflow-y-auto p-4 pb-24">
         {/* User Info Card */}
         <Box className="bg-white rounded-xl p-5 mb-4 shadow-sm flex items-center space-x-4 border border-gray-100">
           <Avatar 
             src={currentUser.avatar} 
-            size={48} 
+            size={64} 
             className="border-2 border-blue-100"
           />
           <Box className="flex-1">
