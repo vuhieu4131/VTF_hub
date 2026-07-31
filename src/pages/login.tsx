@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Page, Header, Box, Text, Input, Button, Modal } from "zmp-ui";
-import { useNavigate } from "react-router-dom";
+import { Page, Box, Text, Input, Header, Modal } from "zmp-ui";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
+import { useNavigate } from "react-router-dom";
+import logo from "../static/logo.jpg";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -42,6 +43,9 @@ const Login: React.FC = () => {
       <Header title="Đăng nhập hệ thống" showBackIcon={false} />
       <Box className="p-6 flex-1 flex flex-col justify-center">
         <Box className="bg-white p-6 rounded-2xl shadow-sm">
+          <Box className="flex justify-center mb-4">
+            <img src={logo} alt="Logo" className="w-24 h-24 object-contain mx-auto" />
+          </Box>
           <Text className="text-xl font-bold text-center text-blue-800 mb-6">Đăng nhập</Text>
           
           {error && <Text className="text-red-500 text-sm mb-4 text-center">{error}</Text>}

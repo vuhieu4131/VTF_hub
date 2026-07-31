@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Page, Header, Box, Text, Button, Modal, Input, List } from "zmp-ui";
+import { Page, Header, Box, Text, Button, Modal, Input, List, Icon } from "zmp-ui";
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { AgencyEvent, Feedback } from "../types/event";
@@ -7,6 +7,8 @@ import { UserProfile } from "../types/document";
 import { currentUserState, allowedEventManagersState } from "../state";
 import { useLocation } from "react-router-dom";
 import { useRecoilValue } from "recoil";
+import { FeedbackInbox } from "../components/FeedbackInbox";
+import { checkNextSalaryRaise, checkNextExtraIncomeRaise } from "../utils/date";
 
 const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<AgencyEvent[]>([]);
@@ -17,9 +19,8 @@ const EventsPage: React.FC = () => {
   const [isEventModalVisible, setEventModalVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Partial<AgencyEvent>>({});
   
-  const [isFeedbackModalVisible, setFeedbackModalVisible] = useState(false);
-  const [feedbackContent, setFeedbackContent] = useState("");
-  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [isBirthdayExpanded, setIsBirthdayExpanded] = useState(true);
+  const [isSalaryExpanded, setIsSalaryExpanded] = useState(true);
   const location = useLocation();
 
   useEffect(() => {
@@ -54,53 +55,68 @@ const EventsPage: React.FC = () => {
   const getUpcomingBirthdays = () => {
     const today = new Date();
     today.setHours(0,0,0,0);
+    const currentMonth = today.getMonth();
     
     return profiles.map(p => {
       if (!p.dob) return null;
-      const parts = p.dob.split('/');
-      if (parts.length !== 3) return null;
-      
-      const bDay = parseInt(parts[0]);
-      const bMonth = parseInt(parts[1]) - 1;
-      
-      let nextBday = new Date(today.getFullYear(), bMonth, bDay);
-      if (nextBday < today) {
-        nextBday = new Date(today.getFullYear() + 1, bMonth, bDay);
+      let bDay, bMonth;
+      if (p.dob.includes('/')) {
+        const parts = p.dob.split('/');
+        if (parts.length !== 3) return null;
+        bDay = parseInt(parts[0]);
+        bMonth = parseInt(parts[1]) - 1;
+      } else if (p.dob.includes('-')) {
+        const parts = p.dob.split('-');
+        if (parts.length !== 3) return null;
+        bDay = parseInt(parts[2]);
+        bMonth = parseInt(parts[1]) - 1;
+      } else {
+        return null;
       }
       
-      const diffDays = Math.ceil((nextBday.getTime() - today.getTime()) / (1000 * 3600 * 24));
-      return { ...p, nextBday, diffDays };
-    }).filter(p => p !== null && p.diffDays <= 30)
-      .sort((a, b) => a!.diffDays - b!.diffDays) as any[];
+      if (bMonth !== currentMonth) return null;
+      
+      const bDayDate = new Date(today.getFullYear(), bMonth, bDay);
+      const diffDays = Math.ceil((bDayDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+      
+      return { ...p, bDay, diffDays };
+    }).filter(p => p !== null)
+      .sort((a, b) => a!.bDay - b!.bDay) as any[];
   };
 
   const upcomingBirthdays = getUpcomingBirthdays();
 
-  const handleSubmitFeedback = async () => {
-    if (!feedbackContent.trim()) {
-      alert("Vui lòng nhập nội dung góp ý!");
-      return;
-    }
-    
-    try {
-      const id = Date.now().toString();
-      const feedback: Feedback = {
-        id,
-        content: feedbackContent,
-        status: 'new',
-        createdAt: new Date().toISOString(),
-        creatorId: isAnonymous ? undefined : currentUser?.id,
-        creatorName: isAnonymous ? undefined : currentUser?.name
-      };
-      
-      await setDoc(doc(db, "feedbacks", id), feedback);
-      alert("Cảm ơn bạn đã gửi góp ý!");
-      setFeedbackModalVisible(false);
-      setFeedbackContent("");
-    } catch (e: any) {
-      alert("Lỗi: " + e.message);
-    }
+  const getUpcomingSalaryRaises = () => {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    const results: any[] = [];
+    profiles.forEach(p => {
+      if (currentUser?.role !== 'admin' && currentUser?.profileId !== p.id) {
+         return;
+      }
+
+      if (p.nextSalaryRaiseDate) {
+        const salaryCheck = checkNextSalaryRaise(p.nextSalaryRaiseDate, p.professionalTitle, currentMonth, currentYear);
+        if (salaryCheck.isMatch) {
+           results.push({ id: p.id + '_salary', fullName: p.fullName, type: 'Lên lương', date: salaryCheck.nextDateStr, day: salaryCheck.bDay });
+        }
+      }
+
+      if (p.nextExtraIncomeRaiseDate) {
+        const extraIncomeCheck = checkNextExtraIncomeRaise(p.nextExtraIncomeRaiseDate, p.extraIncomeCode, currentMonth, currentYear);
+        if (extraIncomeCheck.isMatch) {
+           results.push({ id: p.id + '_extra_income', fullName: p.fullName, type: 'Lên bậc TNTT', date: extraIncomeCheck.nextDateStr, day: extraIncomeCheck.bDay });
+        }
+      }
+    });
+
+    return results.sort((a, b) => a.day - b.day);
   };
+
+  const upcomingSalaryRaises = getUpcomingSalaryRaises();
+
 
   const handleSaveEvent = async () => {
     if (!editingEvent.title || !editingEvent.description) {
@@ -140,6 +156,17 @@ const EventsPage: React.FC = () => {
     setEventModalVisible(true);
   };
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    return dateStr;
+  };
+
   return (
     <Page className="bg-gray-50 flex flex-col h-full">
       <Header title="Thông báo & Bảng tin" showBackIcon={false} />
@@ -165,7 +192,7 @@ const EventsPage: React.FC = () => {
                     <Box className="flex justify-between items-start mb-1">
                       <Box>
                         <Text className="font-bold text-blue-800">{e.title}</Text>
-                        <Text className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block mt-1">{e.date}</Text>
+                        <Text className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block mt-1">{formatDate(e.date)}</Text>
                       </Box>
                       {canCreateEvent && (
                         <Box className="flex space-x-2">
@@ -183,68 +210,80 @@ const EventsPage: React.FC = () => {
 
         {/* Birthdays */}
         <Box>
-          <Text className="font-bold text-gray-800 text-lg mb-3">Sinh nhật sắp tới (30 ngày tới)</Text>
-          {upcomingBirthdays.length === 0 ? (
-             <Text className="text-gray-500 italic text-sm bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-               Không có sinh nhật nào trong tháng tới.
-             </Text>
-          ) : (
-             <List>
-               {upcomingBirthdays.map(p => (
-                 <Box key={p.id} className="bg-white p-3 mb-2 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-                    <Box>
-                      <Text className="font-bold text-gray-800">🎉 {p.fullName}</Text>
-                      <Text className="text-xs text-gray-500">{p.dob} - {p.jobTitle}</Text>
-                    </Box>
-                    <Box className="text-right">
-                      {p.diffDays === 0 ? (
-                        <Text className="text-red-500 font-bold text-sm">Hôm nay!</Text>
-                      ) : (
-                        <Text className="text-orange-500 font-bold text-sm">Còn {p.diffDays} ngày</Text>
-                      )}
-                    </Box>
-                 </Box>
-               ))}
-             </List>
+          <Box 
+            className="flex justify-between items-center mb-3 cursor-pointer"
+            onClick={() => setIsBirthdayExpanded(!isBirthdayExpanded)}
+          >
+            <Text className="font-bold text-gray-800 text-lg">Chúc mừng sinh nhật</Text>
+            <Icon icon={isBirthdayExpanded ? 'zi-chevron-up' : 'zi-chevron-down'} className="text-gray-500" />
+          </Box>
+          {isBirthdayExpanded && (
+            upcomingBirthdays.length === 0 ? (
+               <Text className="text-gray-500 italic text-sm bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                 Không có sinh nhật nào trong tháng này.
+               </Text>
+            ) : (
+               <List>
+                 {upcomingBirthdays.map(p => (
+                   <Box key={p.id} className="bg-white p-3 mb-2 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                      <Box>
+                        <Text className="font-bold text-gray-800">🎉 {p.fullName}</Text>
+                        <Text className="text-xs text-gray-500">{formatDate(p.dob)} - {p.jobTitle}</Text>
+                      </Box>
+                      <Box className="text-right">
+                        {p.diffDays === 0 ? (
+                          <Text className="text-red-500 font-bold text-sm">Hôm nay!</Text>
+                        ) : p.diffDays > 0 ? (
+                          <Text className="text-orange-500 font-bold text-sm">Còn {p.diffDays} ngày</Text>
+                        ) : (
+                          <Text className="text-gray-400 font-medium text-sm">Đã qua</Text>
+                        )}
+                      </Box>
+                   </Box>
+                 ))}
+               </List>
+            )
           )}
         </Box>
 
+        {/* Salary Raises */}
+        {(currentUser?.role === 'admin' || upcomingSalaryRaises.length > 0) && (
+          <Box className="mt-8">
+            <Box 
+              className="flex justify-between items-center mb-3 cursor-pointer"
+              onClick={() => setIsSalaryExpanded(!isSalaryExpanded)}
+            >
+              <Text className="font-bold text-gray-800 text-lg">Thông tin Lương & Thu nhập</Text>
+              <Icon icon={isSalaryExpanded ? 'zi-chevron-up' : 'zi-chevron-down'} className="text-gray-500" />
+            </Box>
+            {isSalaryExpanded && (
+              upcomingSalaryRaises.length === 0 ? (
+                 <Text className="text-gray-500 italic text-sm bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-center">
+                   Không có lịch lên lương/TNTT nào trong tháng này.
+                 </Text>
+              ) : (
+                 <List>
+                   {upcomingSalaryRaises.map(r => (
+                     <Box key={r.id} className="bg-white p-3 mb-2 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center border-l-4 border-green-500">
+                        <Box>
+                          <Text className="font-bold text-gray-800">{r.fullName}</Text>
+                          <Text className="text-xs text-gray-500 mt-1">{r.type} - {formatDate(r.date)}</Text>
+                        </Box>
+                        <Box className="text-right">
+                          <Text className="text-green-600 font-bold text-sm">Tháng này</Text>
+                        </Box>
+                     </Box>
+                   ))}
+                 </List>
+              )
+            )}
+          </Box>
+        )}
+
         {/* Góp ý */}
-        <Box className="mt-8 bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
-          <Text className="font-bold text-blue-800 mb-2">Hòm thư Góp ý</Text>
-          <Text className="text-sm text-gray-600 mb-4">
-            Bạn có đóng góp hoặc đề xuất gì cho cơ quan? Hãy gửi ý kiến (có thể ẩn danh) cho Admin.
-          </Text>
-          <Button onClick={() => setFeedbackModalVisible(true)} size="small">Gửi Góp ý</Button>
-        </Box>
+        <FeedbackInbox />
 
       </Box>
-
-      <Modal
-        visible={isFeedbackModalVisible}
-        title="Gửi Góp ý"
-        onClose={() => setFeedbackModalVisible(false)}
-        actions={[
-          { text: "Hủy", close: true },
-          { text: "Gửi", highLight: true, onClick: handleSubmitFeedback }
-        ]}
-      >
-        <Box className="p-4 space-y-4">
-          <Input.TextArea 
-            placeholder="Nội dung góp ý của bạn..."
-            value={feedbackContent}
-            onChange={(e) => setFeedbackContent(e.target.value)}
-            rows={4}
-          />
-          <Box 
-            className="flex items-center space-x-2 mt-2" 
-            onClick={() => setIsAnonymous(!isAnonymous)}
-          >
-            <input type="checkbox" checked={isAnonymous} readOnly className="w-4 h-4" />
-            <Text className="text-sm text-gray-700">Gửi ẩn danh</Text>
-          </Box>
-        </Box>
-      </Modal>
 
       {/* Modal Thông báo */}
       <Modal

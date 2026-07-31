@@ -7,6 +7,8 @@ import { useRecoilValue } from "recoil";
 import { currentUserState, allowedScheduleManagersState } from "../state";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
+import { Feedback } from "../types/event";
+import { checkNextSalaryRaise, checkNextExtraIncomeRaise } from "../utils/date";
 
 const tabs: Record<string, MenuItem> = {
   "/": {
@@ -44,6 +46,7 @@ export const Navigation: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingCount, setPendingCount] = useState(0);
+  const [unreadFeedbackCount, setUnreadFeedbackCount] = useState(0);
 
   const currentUser = useRecoilValue(currentUserState);
   const allowedScheduleManagers = useRecoilValue(allowedScheduleManagersState);
@@ -61,6 +64,94 @@ export const Navigation: FC = () => {
     });
     return () => unsub();
   }, [currentUser, allowedScheduleManagers]);
+
+  const [hasGeneralNotif, setHasGeneralNotif] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    if (location.pathname === '/notifications') {
+      localStorage.setItem('lastViewedNotifs', new Date().toISOString());
+      setHasGeneralNotif(false);
+      return;
+    }
+
+    const lastViewed = localStorage.getItem('lastViewedNotifs');
+    const lastViewedTime = lastViewed ? new Date(lastViewed).getTime() : 0;
+    const todayStr = new Date().toDateString();
+    const lastViewedDateStr = lastViewed ? new Date(lastViewed).toDateString() : '';
+    const hasViewedToday = todayStr === lastViewedDateStr;
+
+    let hasNewEvents = false;
+    let hasActiveProfilesNotifs = false;
+
+    const unsubEvents = onSnapshot(collection(db, "events"), (snapshot) => {
+      hasNewEvents = false;
+      snapshot.forEach(d => {
+        const ev = d.data();
+        const createdAt = ev.createdAt ? new Date(ev.createdAt).getTime() : 0;
+        if (createdAt > lastViewedTime) {
+          hasNewEvents = true;
+        }
+      });
+      setHasGeneralNotif(hasNewEvents || (!hasViewedToday && hasActiveProfilesNotifs));
+    });
+
+    const unsubProfiles = onSnapshot(collection(db, "profiles"), (snapshot) => {
+      hasActiveProfilesNotifs = false;
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      snapshot.forEach(d => {
+        const p = d.data();
+        // Check birthday
+        if (p.dob) {
+           let bMonth = -1;
+           if (p.dob.includes('/')) bMonth = parseInt(p.dob.split('/')[1]) - 1;
+           else if (p.dob.includes('-')) bMonth = parseInt(p.dob.split('-')[1]) - 1;
+           if (bMonth === currentMonth) hasActiveProfilesNotifs = true;
+        }
+        
+        // Check salary
+        if (currentUser?.role === 'admin' || currentUser?.profileId === d.id) {
+           const salaryCheck = checkNextSalaryRaise(p.nextSalaryRaiseDate, p.professionalTitle, currentMonth, currentYear);
+           if (salaryCheck.isMatch) {
+             hasActiveProfilesNotifs = true;
+           }
+
+           const extraIncomeCheck = checkNextExtraIncomeRaise(p.nextExtraIncomeRaiseDate, p.extraIncomeCode, currentMonth, currentYear);
+           if (extraIncomeCheck.isMatch) {
+             hasActiveProfilesNotifs = true;
+           }
+        }
+      });
+      
+      setHasGeneralNotif(hasNewEvents || (!hasViewedToday && hasActiveProfilesNotifs));
+    });
+
+    return () => {
+      unsubEvents();
+      unsubProfiles();
+    };
+  }, [location.pathname, currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubFeedbacks = onSnapshot(collection(db, "feedbacks"), (snapshot) => {
+      let count = 0;
+      snapshot.forEach(d => {
+        const f = d.data() as Feedback;
+        const isRecipient = f.recipientId === currentUser.id || (currentUser.role === 'admin' && !f.recipientId);
+        if (isRecipient && f.status === 'new') {
+          count++;
+        }
+      });
+      setUnreadFeedbackCount(count);
+    });
+    return () => unsubFeedbacks();
+  }, [currentUser]);
 
   const noBottomNav = useMemo(() => {
     return NO_BOTTOM_NAVIGATION_PAGES.includes(location.pathname);
@@ -85,14 +176,18 @@ export const Navigation: FC = () => {
     >
       {filteredTabs.map((path: string) => {
         const isNotifTab = path === '/notifications';
-        const hasNotifs = isNotifTab && pendingCount > 0;
+        const isProfileTab = path === '/profile';
         
+        let hasBadge = false;
+        if (isNotifTab && (pendingCount > 0 || unreadFeedbackCount > 0 || hasGeneralNotif)) hasBadge = true;
+        if (isProfileTab && unreadFeedbackCount > 0) hasBadge = true;
+
         return (
           <BottomNavigation.Item
             key={path}
             label={tabs[path].label}
             icon={
-              hasNotifs ? (
+              hasBadge ? (
                 <div className="relative inline-block">
                   {tabs[path].icon}
                   <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></div>

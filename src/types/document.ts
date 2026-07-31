@@ -41,6 +41,7 @@ export interface UserProfile {
   nextSalaryRaiseDate: string; // Ngày lên lương (DD/MM/YYYY)
   salaryRaiseDecision: string; // Quyết định số
   
+  extraIncomeCode?: string; // Mã TNTT
   extraIncomeCoefficient: number; // HSTNTT
   nextExtraIncomeRaiseDate: string; // Ngày lên bậc TNTT (DD/MM/YYYY)
 }

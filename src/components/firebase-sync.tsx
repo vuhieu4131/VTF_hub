@@ -27,10 +27,6 @@ export const FirebaseSync: React.FC = () => {
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data() as User;
-          if (!userData.avatar && userLoadable.state === 'hasValue' && userLoadable.contents.avatar) {
-            userData.avatar = userLoadable.contents.avatar;
-            updateDoc(userDoc.ref, { avatar: userData.avatar }).catch(e => console.error(e));
-          }
           setCurrentUser(userData);
         } else {
           setCurrentUser(null);

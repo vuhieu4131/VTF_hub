@@ -6,10 +6,12 @@ import { userState, currentUserState } from "../state";
 import { UserRole } from "../types/document";
 import { departments } from "../constants/departments";
 import { signOut, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth, db } from "../firebase";
+import { auth, db, storage } from "../firebase";
 import { collection, getDocs, deleteDoc, doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
+import { ref, listAll, getDownloadURL } from "firebase/storage";
 import { UserProfile } from "../types/document";
-import { Feedback } from "../types/event";
+import { FeedbackInbox } from "../components/FeedbackInbox";
+import { checkNextSalaryRaise, checkNextExtraIncomeRaise } from "../utils/date";
 
 const roleLabels: Record<UserRole, string> = {
   guest: "Khách",
@@ -50,7 +52,28 @@ const ProfilePage: FC = () => {
         }
       });
     }
-  }, [currentUser]);
+    
+    // Nếu user chưa có avatar, hoặc đang dùng avatar của Zalo (không phải Firebase / Base64), gán ngẫu nhiên 1 ảnh từ thư mục avata
+    const isZaloOrEmptyAvatar = !currentUser?.avatar || (!currentUser.avatar.startsWith('data:') && !currentUser.avatar.startsWith('https://firebasestorage.googleapis.com'));
+    if (currentUser && currentUser.id && isZaloOrEmptyAvatar) {
+      const assignRandomAvatar = async () => {
+        try {
+          const listRef = ref(storage, 'avata');
+          const res = await listAll(listRef);
+          if (res.items.length > 0) {
+            const randomIndex = Math.floor(Math.random() * res.items.length);
+            const randomAvatar = await getDownloadURL(res.items[randomIndex]);
+            
+            await updateDoc(doc(db, "users", currentUser.id), { avatar: randomAvatar });
+            setCurrentUser(prev => prev ? { ...prev, avatar: randomAvatar } : null);
+          }
+        } catch (e) {
+          console.error("Lỗi gán avatar ngẫu nhiên:", e);
+        }
+      };
+      assignRandomAvatar();
+    }
+  }, [currentUser?.id, currentUser?.profileId, currentUser?.avatar]);
 
   const handleLogout = async () => {
     try {
@@ -112,31 +135,6 @@ const ProfilePage: FC = () => {
     }
   };
 
-  const handleSubmitFeedback = async () => {
-    if (!feedbackContent.trim()) {
-      alert("Vui lòng nhập nội dung góp ý!");
-      return;
-    }
-    
-    try {
-      const id = Date.now().toString();
-      const feedback: Feedback = {
-        id,
-        content: feedbackContent,
-        status: 'new',
-        createdAt: new Date().toISOString(),
-        creatorId: isAnonymous ? undefined : currentUser?.id,
-        creatorName: isAnonymous ? undefined : currentUser?.name
-      };
-      
-      await setDoc(doc(db, "feedbacks", id), feedback);
-      alert("Cảm ơn bạn đã gửi góp ý!");
-      setFeedbackModalVisible(false);
-      setFeedbackContent("");
-    } catch (e: any) {
-      alert("Lỗi: " + e.message);
-    }
-  };
 
   const openZaloEdit = () => {
     if (!currentUser) return;
@@ -203,8 +201,8 @@ const ProfilePage: FC = () => {
         {/* User Info Card */}
         <Box className="bg-white rounded-xl p-5 mb-4 shadow-sm flex items-center space-x-4 border border-gray-100">
           <Avatar 
-            src={currentUser.avatar || (userLoadable.state === 'hasValue' ? userLoadable.contents.avatar : undefined)} 
-            size={64}
+            src={currentUser.avatar} 
+            size={48} 
             className="border-2 border-blue-100"
           />
           <Box className="flex-1">
@@ -249,14 +247,8 @@ const ProfilePage: FC = () => {
           </Box>
         </Box>
         
-        {/* Góp ý */}
-        <Box className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center mb-6">
-          <Text className="font-bold text-blue-800 mb-2">Hòm thư Góp ý</Text>
-          <Text className="text-sm text-gray-600 mb-4">
-            Bạn có đóng góp hoặc đề xuất gì cho cơ quan? Hãy gửi ý kiến (có thể ẩn danh) cho Admin.
-          </Text>
-          <Button onClick={() => setFeedbackModalVisible(true)} size="small">Gửi Góp ý</Button>
-        </Box>
+        {/* Hòm thư Góp ý / Nhắn tin */}
+        <FeedbackInbox />
 
         <Button fullWidth variant="secondary" className="!bg-red-50 !text-red-600 border border-red-200" onClick={handleLogout}>
           Đăng xuất
@@ -293,7 +285,7 @@ const ProfilePage: FC = () => {
               <Box className="space-y-3">
                 <Box className="flex justify-center">
                   <Box className="relative">
-                    <Avatar src={zaloEditForm.avatar || currentUser?.avatar || (userLoadable.state === 'hasValue' ? userLoadable.contents.avatar : undefined)} size={64} />
+                    <Avatar src={zaloEditForm.avatar || currentUser?.avatar} size={64} />
                     <Box className="absolute bottom-0 right-0 bg-blue-600 text-white w-6 h-6 flex justify-center items-center rounded-full border-2 border-white cursor-pointer overflow-hidden">
                       <Icon icon="zi-camera" size={12} />
                       <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleAvatarUpload} />
@@ -321,7 +313,7 @@ const ProfilePage: FC = () => {
             ) : (
               <>
                 <Box className="flex items-center space-x-3">
-                  <Avatar src={currentUser?.avatar || (userLoadable.state === 'hasValue' ? userLoadable.contents.avatar : undefined)} size={40} />
+                  <Avatar src={currentUser?.avatar} size={40} />
                   <Box>
                     <Text className="font-bold text-gray-800">{currentUser?.name}</Text>
                     <Text className="text-sm text-gray-500">{currentUser?.email || 'Chưa cập nhật'}</Text>
@@ -397,21 +389,59 @@ const ProfilePage: FC = () => {
                     <Text className="font-bold">{profile.salaryCoefficient}</Text>
                   </Box>
                   <Box className="flex justify-between py-1 border-b border-gray-100">
-                    <Text className="text-gray-500">Ngày lên lương</Text>
+                    <Text className="text-gray-500">Ngày lên lương (Gần nhất)</Text>
                     <Box className="text-right">
-                      <Text className="font-bold text-orange-600">{profile.nextSalaryRaiseDate}</Text>
+                      <Text className="font-bold">{profile.nextSalaryRaiseDate}</Text>
                     </Box>
                   </Box>
+                  {(() => {
+                     if (profile.nextSalaryRaiseDate) {
+                        const salaryCheck = checkNextSalaryRaise(profile.nextSalaryRaiseDate, profile.professionalTitle, 0, 0); // targetMonth, targetYear không quan trọng để lấy date string
+                        if (salaryCheck.nextDateStr) {
+                           return (
+                             <Box className="flex justify-between py-1 border-b border-gray-100">
+                               <Text className="text-gray-500">Ngày lên lương tiếp theo</Text>
+                               <Box className="text-right">
+                                 <Text className="font-bold text-orange-600">{salaryCheck.nextDateStr}</Text>
+                               </Box>
+                             </Box>
+                           )
+                        }
+                     }
+                     return null;
+                  })()}
+                  {profile.extraIncomeCode && (
+                     <Box className="flex justify-between py-1 border-b border-gray-100">
+                       <Text className="text-gray-500">Mã TNTT</Text>
+                       <Text className="font-bold">{profile.extraIncomeCode}</Text>
+                     </Box>
+                  )}
                   <Box className="flex justify-between py-1 border-b border-gray-100">
                     <Text className="text-gray-500">Hệ số Thu nhập TT</Text>
                     <Text className="font-bold">{profile.extraIncomeCoefficient}</Text>
                   </Box>
-                  <Box className="flex justify-between py-1">
-                    <Text className="text-gray-500">Ngày lên bậc TNTT</Text>
+                  <Box className="flex justify-between py-1 border-b border-gray-100">
+                    <Text className="text-gray-500">Ngày lên bậc TNTT (Gần nhất)</Text>
                     <Box className="text-right">
-                      <Text className="font-bold text-green-600">{profile.nextExtraIncomeRaiseDate}</Text>
+                      <Text className="font-bold">{profile.nextExtraIncomeRaiseDate || '---'}</Text>
                     </Box>
                   </Box>
+                  {(() => {
+                     if (profile.nextExtraIncomeRaiseDate) {
+                        const extraCheck = checkNextExtraIncomeRaise(profile.nextExtraIncomeRaiseDate, profile.extraIncomeCode, 0, 0);
+                        if (extraCheck.nextDateStr) {
+                           return (
+                             <Box className="flex justify-between py-1">
+                               <Text className="text-gray-500">Ngày lên bậc TNTT tiếp theo</Text>
+                               <Box className="text-right">
+                                 <Text className="font-bold text-green-600">{extraCheck.nextDateStr}</Text>
+                               </Box>
+                             </Box>
+                           )
+                        }
+                     }
+                     return null;
+                  })()}
                 </Box>
               )}
               </Box>
@@ -462,32 +492,6 @@ const ProfilePage: FC = () => {
         </Box>
       </Modal>
 
-      {/* Feedback Modal */}
-      <Modal
-        visible={isFeedbackModalVisible}
-        title="Gửi Góp ý"
-        onClose={() => setFeedbackModalVisible(false)}
-        actions={[
-          { text: "Hủy", close: true },
-          { text: "Gửi", highLight: true, onClick: handleSubmitFeedback }
-        ]}
-      >
-        <Box className="p-4 space-y-4">
-          <Input.TextArea 
-            placeholder="Nội dung góp ý của bạn..."
-            value={feedbackContent}
-            onChange={(e) => setFeedbackContent(e.target.value)}
-            rows={4}
-          />
-          <Box 
-            className="flex items-center space-x-2 mt-2 cursor-pointer" 
-            onClick={() => setIsAnonymous(!isAnonymous)}
-          >
-            <input type="checkbox" checked={isAnonymous} readOnly className="w-4 h-4" />
-            <Text className="text-sm text-gray-700">Gửi ẩn danh</Text>
-          </Box>
-        </Box>
-      </Modal>
     </Page>
   );
 };

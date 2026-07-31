@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text, List, Icon, Button, Modal, Input, Select } from "zmp-ui";
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
-import { UserProfile, DepartmentId } from "../../types/document";
+import { UserProfile, DepartmentId, User } from "../../types/document";
 import { departments } from "../../constants/departments";
+import { useRecoilValue } from "recoil";
+import { userListState } from "../../state";
 
 export const DirectoryList: React.FC = () => {
+  const users = useRecoilValue(userListState);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [expandedDeptIds, setExpandedDeptIds] = useState<string[]>(departments.map(d => d.id));
   
@@ -58,6 +61,20 @@ export const DirectoryList: React.FC = () => {
     }
   };
 
+  const handleUnlinkUser = async (e: React.MouseEvent, user: User) => {
+    e.stopPropagation();
+    if (confirm(`Xác nhận: Gỡ ghép nối tài khoản Zalo "${user.name}" khỏi hồ sơ này?\n\nTài khoản này sẽ bị khóa tạm thời và đưa về danh sách Chờ duyệt.`)) {
+      try {
+        await updateDoc(doc(db, "users", user.id), {
+          profileId: "",
+          status: 'pending_approval'
+        });
+      } catch (err: any) {
+        alert("Lỗi khi gỡ ghép nối: " + err.message);
+      }
+    }
+  };
+
   const openEdit = (e: React.MouseEvent, p: UserProfile) => {
     e.stopPropagation();
     setEditingProfile(p);
@@ -100,21 +117,42 @@ export const DirectoryList: React.FC = () => {
               
               {isExpanded && (
                 <List className="!m-0">
-                  {deptProfiles.map((p, index) => (
-                    <Box key={p.id} className={`p-3 flex justify-between items-center ${index < deptProfiles.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                      <Box className="flex-1 pr-2">
-                        <Text className="font-bold text-gray-800">{p.fullName}</Text>
-                        <Text className="text-sm text-gray-500">{p.jobTitle || 'Chưa cập nhật'} - {p.employeeCode}</Text>
-                        {p.phone && (
-                           <Text className="text-xs text-gray-400 mt-1">SĐT: {p.phone}</Text>
-                        )}
+                  {deptProfiles.map((p, index) => {
+                    const linkedUser = users.find(u => u.profileId === p.id);
+                    
+                    return (
+                      <Box key={p.id} className={`p-3 flex justify-between items-start ${index < deptProfiles.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                        <Box className="flex-1 pr-2">
+                          <Text className="font-bold text-gray-800">{p.fullName}</Text>
+                          <Text className="text-sm text-gray-500">{p.jobTitle || 'Chưa cập nhật'} - {p.employeeCode}</Text>
+                          {p.phone && (
+                             <Text className="text-xs text-gray-400 mt-1">SĐT: {p.phone}</Text>
+                          )}
+                          
+                          {linkedUser ? (
+                            <Box className="mt-2 bg-blue-50 p-2 rounded-lg border border-blue-100 flex items-center justify-between">
+                               <Box>
+                                 <Text className="text-xs text-blue-800 font-bold">Đã ghép: {linkedUser.name}</Text>
+                                 <Text className="text-[10px] text-blue-600 truncate max-w-[120px]">{linkedUser.email || 'Zalo App'}</Text>
+                               </Box>
+                               <button 
+                                 className="text-xs bg-white text-orange-600 border border-orange-200 px-2 py-1 rounded shadow-sm hover:bg-orange-50 ml-2"
+                                 onClick={(e) => handleUnlinkUser(e, linkedUser)}
+                               >
+                                 Gỡ bỏ
+                               </button>
+                            </Box>
+                          ) : (
+                            <Text className="text-[11px] text-orange-500 italic mt-2">Chưa ghép tài khoản Zalo</Text>
+                          )}
+                        </Box>
+                        <Box className="flex flex-col space-y-2 mt-1">
+                          <Button size="small" variant="tertiary" onClick={(e) => openEdit(e, p)}>Sửa</Button>
+                          <Button size="small" variant="secondary" className="!text-red-500" onClick={(e) => handleDelete(e, p.id)}>Xóa</Button>
+                        </Box>
                       </Box>
-                      <Box className="flex flex-col space-y-2">
-                        <Button size="small" variant="tertiary" onClick={(e) => openEdit(e, p)}>Sửa</Button>
-                        <Button size="small" variant="secondary" className="!text-red-500" onClick={(e) => handleDelete(e, p.id)}>Xóa</Button>
-                      </Box>
-                    </Box>
-                  ))}
+                    );
+                  })}
                 </List>
               )}
             </Box>
@@ -182,6 +220,7 @@ export const DirectoryList: React.FC = () => {
           <Input label="Ngày lên lương" type={"date" as any} value={editingProfile.nextSalaryRaiseDate} onChange={e => setEditingProfile({...editingProfile, nextSalaryRaiseDate: e.target.value})} />
           <Input label="Quyết định số" value={editingProfile.salaryRaiseDecision} onChange={e => setEditingProfile({...editingProfile, salaryRaiseDecision: e.target.value})} />
           
+          <Input label="Mã TNTT" value={editingProfile.extraIncomeCode || ''} onChange={e => setEditingProfile({...editingProfile, extraIncomeCode: e.target.value})} />
           <Input type="number" label="Hệ số Thu nhập tăng thêm (HSTNTT)" value={editingProfile.extraIncomeCoefficient?.toString()} onChange={e => setEditingProfile({...editingProfile, extraIncomeCoefficient: parseFloat(e.target.value) || 0})} />
           <Input label="Ngày lên bậc TNTT" type={"date" as any} value={editingProfile.nextExtraIncomeRaiseDate} onChange={e => setEditingProfile({...editingProfile, nextExtraIncomeRaiseDate: e.target.value})} />
         </Box>

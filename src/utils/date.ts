@@ -41,3 +41,72 @@ export function displayDate(date: Date, hint?: boolean) {
   }
   return `${day}/${month}/${year}`;
 }
+
+export function checkNextSalaryRaise(baseDateStr: string, titleCode: string, targetMonth: number, targetYear: number) {
+  if (!baseDateStr) return { isMatch: false };
+  let bYear = -1, bMonth = -1, bDay = -1;
+  
+  if (baseDateStr.includes('-')) {
+     const parts = baseDateStr.split('-');
+     if (parts.length === 3) { bYear = parseInt(parts[0]); bMonth = parseInt(parts[1]) - 1; bDay = parseInt(parts[2]); }
+  } else if (baseDateStr.includes('/')) {
+     const parts = baseDateStr.split('/');
+     if (parts.length === 3) { bDay = parseInt(parts[0]); bMonth = parseInt(parts[1]) - 1; bYear = parseInt(parts[2]); }
+  }
+  
+  if (bYear === -1 || isNaN(bYear)) return { isMatch: false };
+
+  let yearsToAdd = 3; // Mặc định là 3 năm
+  const code = (titleCode || "").trim().toUpperCase();
+  if (["CV", "CVC", "CVCC", "CHUYÊN VIÊN", "CHUYÊN VIÊN CHÍNH", "CHUYÊN VIÊN CAO CẤP"].includes(code)) {
+      yearsToAdd = 3;
+  } else if (["NV", "TQ", "NHÂN VIÊN", "THỦ QUỸ"].includes(code)) {
+      yearsToAdd = 2;
+  } else if (["TN", "TẬP SỰ", "THỰC TẬP SINH"].includes(code)) {
+      yearsToAdd = 1;
+  }
+  
+  const nextYear = bYear + yearsToAdd;
+  const isMatch = (nextYear === targetYear && bMonth === targetMonth);
+  
+  const dStr = bDay.toString().padStart(2, '0');
+  const mStr = (bMonth + 1).toString().padStart(2, '0');
+  const nextDateStr = `${dStr}/${mStr}/${nextYear}`;
+
+  return { isMatch, nextDateStr, bDay };
+}
+
+export function checkNextExtraIncomeRaise(baseDateStr: string, jobTitleCode: string | undefined, targetMonth: number, targetYear: number) {
+  if (!baseDateStr) return { isMatch: false };
+  let bYear = -1, bMonth = -1, bDay = -1;
+  
+  if (baseDateStr.includes('-')) {
+     const parts = baseDateStr.split('-');
+     if (parts.length === 3) { bYear = parseInt(parts[0]); bMonth = parseInt(parts[1]) - 1; bDay = parseInt(parts[2]); }
+  } else if (baseDateStr.includes('/')) {
+     const parts = baseDateStr.split('/');
+     if (parts.length === 3) { bDay = parseInt(parts[0]); bMonth = parseInt(parts[1]) - 1; bYear = parseInt(parts[2]); }
+  }
+  
+  if (bYear === -1 || isNaN(bYear)) return { isMatch: false };
+
+  let yearsToAdd = 0;
+  const code = (jobTitleCode || "").trim().toUpperCase();
+  if (["GD", "PGD", "TB", "PB"].includes(code)) {
+      yearsToAdd = 5;
+  } else if (["CV", "CV0", "LX"].includes(code)) {
+      yearsToAdd = 3;
+  } else {
+      // Mặc định hoặc mã khác
+      yearsToAdd = 3;
+  }
+  
+  const nextYear = bYear + yearsToAdd;
+  const isMatch = (nextYear === targetYear && bMonth === targetMonth);
+  
+  const dStr = bDay.toString().padStart(2, '0');
+  const mStr = (bMonth + 1).toString().padStart(2, '0');
+  const nextDateStr = `${dStr}/${mStr}/${nextYear}`;
+
+  return { isMatch, nextDateStr, bDay };
+}

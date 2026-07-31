@@ -500,14 +500,14 @@ const DiaryPage: React.FC = () => {
             >
               <Text className="text-sm font-bold text-orange-700 flex items-center space-x-1">
                 <Icon icon="zi-clock-2-solid" />
-                <span>Công việc SẼ LÀM (mỗi dòng 1 việc)</span>
+                <span>Công việc ĐANG LÀM (mỗi dòng 1 việc)</span>
               </Text>
               <Icon icon={isPlannedExpanded ? "zi-chevron-up" : "zi-chevron-down"} className="text-gray-500" />
             </Box>
             {isPlannedExpanded && (
               <Input.TextArea 
                 rows={4}
-                placeholder="Ghi các công việc dự kiến"
+                placeholder="Ghi các công việc đang làm"
                 value={plannedText}
                 onChange={(e) => setPlannedText(e.target.value)}
                 className="border-orange-200 focus:border-orange-500"
