@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Page, Header, Box, Text, Input, Button, Select } from "zmp-ui";
 import { useRecoilValueLoadable } from "recoil";
 import { userState } from "../state";
-import logo from "../static/logo.jpg";
+import logo from "../static/logo.png";
 import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";

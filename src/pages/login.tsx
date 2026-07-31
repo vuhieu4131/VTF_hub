@@ -3,7 +3,7 @@ import { Page, Box, Text, Input, Header, Modal } from "zmp-ui";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 import { useNavigate } from "react-router-dom";
-import logo from "../static/logo.jpg";
+import logo from "../static/logo.png";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");

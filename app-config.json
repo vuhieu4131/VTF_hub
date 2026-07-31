@@ -9,11 +9,11 @@
     "hideIOSSafeAreaBottom": false,
     "actionBarHidden": true
   },
-  "listCSS": [],
-  "listSyncJS": [],
+  "listCSS": ["assets/index-DSQPzzUw.css"],
+  "listSyncJS": ["assets/index.BSQzL_VG.module.js"],
   "listAsyncJS": [],
   "template": {
-    "name": "vtci-portal",
+    "name": "zaui-coffee",
     "primaryColor": "#006af5",
     "prefixCurrencySymbol": false,
     "currencySymbol": "đ",
