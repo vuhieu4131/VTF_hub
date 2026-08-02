@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Page, Box, Text, Input, Header, Modal } from "zmp-ui";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 import { useNavigate } from "react-router-dom";
-import { getUserInfo } from "zmp-sdk";
 import logo from "../static/logo.png";
 
 const Login: React.FC = () => {
@@ -13,22 +12,8 @@ const Login: React.FC = () => {
   const [resetModalVisible, setResetModalVisible] = useState(false);
   const [welcomeModalVisible, setWelcomeModalVisible] = useState(true);
   const [resetEmail, setResetEmail] = useState("");
-  const [zaloName, setZaloName] = useState("");
+  const [termsModalVisible, setTermsModalVisible] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const fetchZaloName = async () => {
-      try {
-        const { userInfo } = await getUserInfo({ autoRequestPermission: true });
-        if (userInfo && userInfo.name) {
-          setZaloName(userInfo.name);
-        }
-      } catch (error) {
-        console.error("Failed to get Zalo user info", error);
-      }
-    };
-    fetchZaloName();
-  }, []);
 
   const handleLogin = async () => {
     try {
@@ -94,9 +79,12 @@ const Login: React.FC = () => {
             </button>
           </Box>
           
-          <Box className="mt-4 text-center">
+          <Box className="mt-4 flex flex-col items-center space-y-2">
             <Text className="text-sm text-blue-600 cursor-pointer" onClick={() => setResetModalVisible(true)}>
               Quên mật khẩu?
+            </Text>
+            <Text className="text-sm text-gray-500 cursor-pointer underline hover:text-blue-600 transition-colors" onClick={() => setTermsModalVisible(true)}>
+              Điều khoản hoạt động
             </Text>
           </Box>
           
@@ -112,7 +100,7 @@ const Login: React.FC = () => {
       {/* Welcome Modal */}
       <Modal 
         visible={welcomeModalVisible} 
-        title={zaloName ? `Chào mừng bạn ${zaloName} đến với VTF - Hub` : "Chào mừng đến với VTF - Hub"}
+        title="Welcome to VTF_Hub"
         onClose={() => setWelcomeModalVisible(false)}
         actions={[
           { text: "Bắt đầu khám phá", highLight: true, onClick: () => setWelcomeModalVisible(false) }
@@ -150,6 +138,72 @@ const Login: React.FC = () => {
             value={resetEmail}
             onChange={(e) => setResetEmail(e.target.value)}
           />
+        </Box>
+      </Modal>
+    {/* Terms of Use Modal */}
+      <Modal
+        visible={termsModalVisible}
+        title="Điều khoản sử dụng"
+        onClose={() => setTermsModalVisible(false)}
+        actions={[
+          { text: "Đóng", highLight: true, onClick: () => setTermsModalVisible(false) }
+        ]}
+      >
+        <Box className="p-4 h-[60vh] overflow-y-auto thin-scrollbar">
+          <Text className="text-[15px] font-bold text-blue-800 mb-3 text-center">
+            Điều khoản sử dụng ứng dụng "VTF Hub - Trạm tiện ích VTCI"
+          </Text>
+          <Text className="text-sm text-gray-700 mb-3 text-justify">
+            Chào mừng bạn đến với ứng dụng VTF Hub - Trạm tiện ích VTCI (sau đây gọi tắt là "Ứng dụng"). Ứng dụng được thiết kế dưới dạng Zalo Mini App nhằm cung cấp không gian làm việc số và quản lý thông tin nội bộ cho Viên chức, nhân viên.
+          </Text>
+          <Text className="text-sm text-gray-700 mb-4 text-justify">
+            Bằng việc truy cập và sử dụng Ứng dụng, bạn đồng ý tuân thủ các Điều khoản sử dụng dưới đây. Vui lòng đọc kỹ các quy định này trước khi bắt đầu sử dụng.
+          </Text>
+
+          <Text className="text-sm font-bold text-gray-800 mb-2 mt-4">1. Mục đích của Ứng dụng</Text>
+          <Text className="text-sm text-gray-700 mb-2">VTF Hub - Trạm tiện ích VTCI cung cấp các công cụ hỗ trợ công việc nội bộ, bao gồm nhưng không giới hạn ở:</Text>
+          <ul className="list-disc pl-5 text-sm text-gray-700 mb-3 space-y-1">
+            <li><span className="font-medium">Quản lý Lịch làm việc và Công tác:</span> Đăng ký, theo dõi, và phê duyệt lịch làm việc, lịch họp, cũng như báo nghỉ phép/đi công tác.</li>
+            <li><span className="font-medium">Quản lý Nhật ký công việc:</span> Ghi nhận và theo dõi các công việc đã hoàn thành và kế hoạch công việc hàng ngày.</li>
+            <li><span className="font-medium">Thông tin và Sự kiện:</span> Cập nhật các thông báo nội bộ, sự kiện cơ quan và hòm thư góp ý/phản hồi.</li>
+            <li><span className="font-medium">Quản lý Hồ sơ nhân sự:</span> Quản lý thông tin cá nhân, chức danh, hệ số lương và lịch nâng lương/nâng bậc.</li>
+          </ul>
+
+          <Text className="text-sm font-bold text-gray-800 mb-2 mt-4">2. Tài khoản và Bảo mật</Text>
+          <ul className="list-disc pl-5 text-sm text-gray-700 mb-3 space-y-1">
+            <li><span className="font-medium">Cấp phát tài khoản:</span> Tài khoản sử dụng Ứng dụng chỉ được cấp cho Viên chức, nhân viên và những cá nhân được ủy quyền hợp lệ trong tổ chức.</li>
+            <li><span className="font-medium">Bảo mật thông tin:</span> Bạn có trách nhiệm bảo mật tuyệt đối tài khoản cá nhân. Không chia sẻ tài khoản cho bất kỳ bên thứ ba nào. Mọi thao tác được thực hiện dưới tài khoản của bạn sẽ được coi là do chính bạn thực hiện.</li>
+            <li><span className="font-medium">Xử lý sự cố:</span> Trong trường hợp phát hiện tài khoản bị truy cập trái phép, bạn cần thông báo ngay lập tức cho Ban Quản trị (Admin) để được hỗ trợ kịp thời.</li>
+          </ul>
+
+          <Text className="text-sm font-bold text-gray-800 mb-2 mt-4">3. Trách nhiệm của Người sử dụng</Text>
+          <Text className="text-sm text-gray-700 mb-2">Khi sử dụng Ứng dụng, bạn cam kết thực hiện các quy định sau:</Text>
+          <ul className="list-disc pl-5 text-sm text-gray-700 mb-3 space-y-1">
+            <li><span className="font-medium">Sử dụng đúng mục đích:</span> Chỉ sử dụng Ứng dụng để phục vụ cho các công việc nội bộ và các nhiệm vụ được giao.</li>
+            <li><span className="font-medium">Tính chính xác của thông tin:</span> Đảm bảo tính trung thực, chính xác khi khai báo nhật ký công việc, thông tin nhân sự và khi tạo các đề nghị lịch trình, xin nghỉ phép.</li>
+            <li><span className="font-medium">Bảo mật dữ liệu nội bộ:</span> Tuyệt đối không sao chép, phát tán, hoặc chia sẻ trái phép các thông tin mang tính bảo mật như: thông tin hồ sơ nhân sự, hệ số lương/thu nhập của cá nhân khác, kế hoạch và lịch trình làm việc nội bộ ra bên ngoài tổ chức.</li>
+            <li><span className="font-medium">Văn hóa giao tiếp:</span> Sử dụng ngôn từ chuẩn mực, chuyên nghiệp trong quá trình trao đổi, cũng như khi sử dụng tính năng "Góp ý/Phản hồi".</li>
+          </ul>
+
+          <Text className="text-sm font-bold text-gray-800 mb-2 mt-4">4. Trách nhiệm và Quyền hạn của Ban Quản trị (Admin)</Text>
+          <ul className="list-disc pl-5 text-sm text-gray-700 mb-3 space-y-1">
+            <li><span className="font-medium">Quản lý hệ thống:</span> Ban Quản trị có quyền cấp phát, điều chỉnh phân quyền, khóa hoặc xóa tài khoản của người dùng khi có sự thay đổi về mặt nhân sự hoặc khi phát hiện vi phạm.</li>
+            <li><span className="font-medium">Giám sát dữ liệu:</span> Nhằm đảm bảo an toàn thông tin và chất lượng công việc, Ban Quản trị có quyền giám sát các thông tin công việc, lịch trình, nhật ký trên hệ thống.</li>
+            <li><span className="font-medium">Bảo trì hệ thống:</span> Ban Quản trị có thể tạm ngưng cung cấp dịch vụ để tiến hành bảo trì, nâng cấp hệ thống và sẽ có thông báo trước (trừ các trường hợp sự cố khẩn cấp).</li>
+          </ul>
+
+          <Text className="text-sm font-bold text-gray-800 mb-2 mt-4">5. Xử lý vi phạm</Text>
+          <Text className="text-sm text-gray-700 mb-2">Mọi hành vi vi phạm các Điều khoản sử dụng này, tùy thuộc vào mức độ, sẽ bị xử lý theo quy định của tổ chức. Các biện pháp xử lý có thể bao gồm:</Text>
+          <ul className="list-disc pl-5 text-sm text-gray-700 mb-3 space-y-1">
+            <li>Nhắc nhở, cảnh cáo.</li>
+            <li>Tạm khóa hoặc thu hồi vĩnh viễn quyền truy cập Ứng dụng.</li>
+            <li>Chịu trách nhiệm kỷ luật theo quy định của cơ quan hoặc pháp luật hiện hành nếu hành vi vi phạm gây thất thoát dữ liệu, lộ lọt bí mật hoặc ảnh hưởng nghiêm trọng đến tổ chức.</li>
+          </ul>
+
+          <Text className="text-sm font-bold text-gray-800 mb-2 mt-4">6. Sửa đổi Điều khoản</Text>
+          <Text className="text-sm text-gray-700 mb-2 text-justify">
+            Ban Quản trị có quyền điều chỉnh, bổ sung Điều khoản sử dụng này vào bất kỳ thời điểm nào nhằm phù hợp với quy trình hoạt động của tổ chức. Các thay đổi sẽ được thông báo rộng rãi tới người dùng thông qua tính năng "Sự kiện / Thông báo" trên Ứng dụng. Việc bạn tiếp tục sử dụng Ứng dụng sau khi Điều khoản được cập nhật đồng nghĩa với việc bạn chấp thuận các nội dung mới.
+          </Text>
         </Box>
       </Modal>
     </Page>
