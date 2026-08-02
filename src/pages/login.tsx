@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Page, Box, Text, Input, Header, Modal } from "zmp-ui";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../firebase";
 import { useNavigate } from "react-router-dom";
+import { getUserInfo } from "zmp-sdk";
 import logo from "../static/logo.png";
 
 const Login: React.FC = () => {
@@ -10,8 +11,24 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [welcomeModalVisible, setWelcomeModalVisible] = useState(true);
   const [resetEmail, setResetEmail] = useState("");
+  const [zaloName, setZaloName] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchZaloName = async () => {
+      try {
+        const { userInfo } = await getUserInfo({ autoRequestPermission: true });
+        if (userInfo && userInfo.name) {
+          setZaloName(userInfo.name);
+        }
+      } catch (error) {
+        console.error("Failed to get Zalo user info", error);
+      }
+    };
+    fetchZaloName();
+  }, []);
 
   const handleLogin = async () => {
     try {
@@ -91,6 +108,27 @@ const Login: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Welcome Modal */}
+      <Modal 
+        visible={welcomeModalVisible} 
+        title={zaloName ? `Chào mừng bạn ${zaloName} đến với VTF - Hub` : "Chào mừng đến với VTF - Hub"}
+        onClose={() => setWelcomeModalVisible(false)}
+        actions={[
+          { text: "Bắt đầu khám phá", highLight: true, onClick: () => setWelcomeModalVisible(false) }
+        ]}
+      >
+        <Box className="p-4 flex flex-col items-center">
+          <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 shadow-inner">
+            <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+          </div>
+          <Text className="text-[15px] text-gray-700 leading-relaxed text-center">
+            Ứng dụng <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">VTF Hub - Trạm tiện ích VTCI</span> là ứng dụng nội bộ của viên chức, nhân viên VTF trong việc ứng dụng <span className="font-medium text-blue-700">Chuyển đổi số</span> và <span className="font-medium text-blue-700">Đổi mới sáng tạo</span> trong công việc hàng ngày.
+          </Text>
+        </Box>
+      </Modal>
 
       {/* Forgot Password Modal */}
       <Modal 
