@@ -48,7 +48,11 @@ const Login: React.FC = () => {
           <Box className="flex justify-center mb-4">
             <img src={logo} alt="Logo" className="w-24 h-24 object-contain mx-auto" />
           </Box>
-          <Text className="text-xl font-bold text-center text-blue-800 mb-6">Đăng nhập</Text>
+          <Text className="text-xl font-bold text-center text-blue-800 mb-2">Đăng nhập</Text>
+          
+          <Text className="text-sm text-center text-gray-500 mb-6 px-4">
+            Đây là ứng dụng nội bộ, vui lòng đăng nhập bằng tài khoản đã được duyệt.
+          </Text>
           
           {error && <Text className="text-red-500 text-sm mb-4 text-center">{error}</Text>}
           
@@ -154,7 +158,7 @@ const Login: React.FC = () => {
             Điều khoản sử dụng ứng dụng "VTF Hub - Trạm tiện ích VTCI"
           </Text>
           <Text className="text-sm text-gray-700 mb-3 text-justify">
-            Chào mừng bạn đến với ứng dụng VTF Hub - Trạm tiện ích VTCI (sau đây gọi tắt là "Ứng dụng"). Ứng dụng được thiết kế dưới dạng Zalo Mini App nhằm cung cấp không gian làm việc số và quản lý thông tin nội bộ cho Viên chức, nhân viên.
+            Chào mừng bạn đến với ứng dụng VTF Hub - Trạm tiện ích VTCI (sau đây gọi tắt là "Ứng dụng"). Ứng dụng được thiết kế dưới dạng Zalo Mini App nhằm cung cấp không gian làm việc số và quản lý thông tin nội bộ cho Viên chức, nhân viên. <span className="font-semibold text-blue-700">Xin lưu ý: Đây là ứng dụng lưu hành nội bộ, chỉ dành riêng cho cán bộ, nhân viên của VTF.</span>
           </Text>
           <Text className="text-sm text-gray-700 mb-4 text-justify">
             Bằng việc truy cập và sử dụng Ứng dụng, bạn đồng ý tuân thủ các Điều khoản sử dụng dưới đây. Vui lòng đọc kỹ các quy định này trước khi bắt đầu sử dụng.

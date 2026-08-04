@@ -27,6 +27,7 @@ const HomePage: React.FC = () => {
   const users = useRecoilValue(userListState);
   const [isLeaveUserSelectVisible, setLeaveUserSelectVisible] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Partial<ScheduleEvent>>({});
+  const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "schedules"), (snapshot) => {
@@ -243,6 +244,8 @@ const HomePage: React.FC = () => {
           const isToday = dateStr === todayStr;
           
           const hasEvents = morningEvents.length > 0 || afternoonEvents.length > 0 || leaveEvents.length > 0;
+          const hasWorkEvents = morningEvents.length > 0 || afternoonEvents.length > 0;
+          const isExpanded = expandedDays[dateStr] ?? (dateStr >= todayStr);
 
           return (
             <Box 
@@ -250,8 +253,17 @@ const HomePage: React.FC = () => {
               className={`bg-white rounded-2xl shadow-sm overflow-hidden border ${isToday ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-100'}`}
             >
               {/* Day Header */}
-              <Box className={`px-4 py-3 flex justify-between items-center ${isToday ? 'bg-blue-50' : 'bg-gray-50 border-b border-gray-100'}`}>
+              <Box 
+                className={`px-4 py-3 flex justify-between items-center cursor-pointer ${isToday ? 'bg-blue-50' : 'bg-gray-50 border-b border-gray-100'}`}
+                onClick={() => {
+                  setExpandedDays(prev => ({
+                    ...prev,
+                    [dateStr]: !isExpanded
+                  }));
+                }}
+              >
                 <Box className="flex items-center space-x-2">
+                  <Icon icon={isExpanded ? "zi-chevron-up" : "zi-chevron-down"} className="text-gray-500" />
                   <Text className={`font-bold text-lg ${isToday ? 'text-blue-700' : 'text-gray-800'}`}>
                     {DAYS_OF_WEEK[date.getDay()]}
                   </Text>
@@ -260,13 +272,22 @@ const HomePage: React.FC = () => {
                       Hôm nay
                     </Text>
                   )}
+                  {hasWorkEvents ? (
+                    <Text className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full ml-1">
+                      Có lịch
+                    </Text>
+                  ) : (
+                    <Text className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full ml-1">
+                      Trống
+                    </Text>
+                  )}
                 </Box>
                 <Text className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-500'}`}>
                   {formatDate(date)}
                 </Text>
               </Box>
 
-              <Box className="p-2">
+              <Box className={`p-2 transition-all duration-300 ${isExpanded ? 'block' : 'hidden'}`}>
                 {!hasEvents ? (
                   <Box className="py-4 text-center">
                     <Text className="text-gray-400 italic text-sm">Không có lịch trình</Text>

@@ -417,6 +417,12 @@ const ProfilePage: FC = () => {
                      }
                      return null;
                   })()}
+                  {profile.salaryRaiseDecision && (
+                     <Box className="flex justify-between py-1 border-b border-gray-100">
+                       <Text className="text-gray-500">Quyết định số</Text>
+                       <Text className="font-bold">{profile.salaryRaiseDecision}</Text>
+                     </Box>
+                  )}
                   {profile.extraIncomeCode && (
                      <Box className="flex justify-between py-1 border-b border-gray-100">
                        <Text className="text-gray-500">Mã TNTT</Text>

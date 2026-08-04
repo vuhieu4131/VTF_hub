@@ -48,6 +48,22 @@ export const DirectoryList: React.FC = () => {
         ...editingProfile,
         id
       });
+
+      // Sync role and department to linked user if any
+      const linkedUser = users.find(u => u.profileId === id);
+      if (linkedUser) {
+        const jobTitleLower = (editingProfile.jobTitle || '').toLowerCase().trim();
+        const role = jobTitleLower === 'giám đốc' ? 'giam_doc' : 
+              jobTitleLower === 'phó giám đốc' ? 'pho_giam_doc' :
+              (jobTitleLower === 'trưởng ban' || jobTitleLower === 'phó trưởng ban') ? 'truong_ban' :
+              jobTitleLower === 'văn thư' ? 'van_thu' : 'chuyen_vien';
+
+        await updateDoc(doc(db, "users", linkedUser.id), {
+          role,
+          departmentId: editingProfile.departmentId
+        });
+      }
+
       setModalVisible(false);
     } catch (e: any) {
       alert("Lỗi: " + e.message);

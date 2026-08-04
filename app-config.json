@@ -9,8 +9,8 @@
     "hideIOSSafeAreaBottom": false,
     "actionBarHidden": true
   },
-  "listCSS": ["assets/index-DSQPzzUw.css"],
-  "listSyncJS": ["assets/index.BSQzL_VG.module.js"],
+  "listCSS": [],
+  "listSyncJS": [],
   "listAsyncJS": [],
   "template": {
     "name": "zaui-coffee",

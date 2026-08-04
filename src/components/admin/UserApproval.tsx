@@ -5,6 +5,7 @@ import { userListState } from "../../state";
 import { User, UserProfile } from "../../types/document";
 import { collection, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../../firebase";
+import { departments } from "../../constants/departments";
 
 export const UserApproval: React.FC = () => {
   const users = useRecoilValue(userListState);
@@ -38,12 +39,13 @@ export const UserApproval: React.FC = () => {
     }
 
     try {
+      const jobTitleLower = (profile.jobTitle || '').toLowerCase().trim();
       await updateDoc(doc(db, "users", user.id), {
         status: 'active',
-        role: profile.jobTitle === 'Giám đốc' ? 'giam_doc' : 
-              profile.jobTitle === 'Phó Giám đốc' ? 'pho_giam_doc' :
-              profile.jobTitle === 'Trưởng ban' || profile.jobTitle === 'Phó trưởng ban' ? 'truong_ban' :
-              profile.jobTitle === 'Văn thư' ? 'van_thu' : 'chuyen_vien',
+        role: jobTitleLower === 'giám đốc' ? 'giam_doc' : 
+              jobTitleLower === 'phó giám đốc' ? 'pho_giam_doc' :
+              (jobTitleLower === 'trưởng ban' || jobTitleLower === 'phó trưởng ban') ? 'truong_ban' :
+              jobTitleLower === 'văn thư' ? 'van_thu' : 'chuyen_vien',
         departmentId: profile.departmentId,
         profileId: profile.id,
       });
@@ -87,13 +89,61 @@ export const UserApproval: React.FC = () => {
             <Text className="text-xs text-gray-500 mb-1">Ghép với Hồ sơ gốc:</Text>
             <Select 
               value={selectedProfileId[user.id] || ""} 
-              onChange={(v) => setSelectedProfileId({...selectedProfileId, [user.id]: v as string})}
+              onChange={(v) => {
+                const val = v as string;
+                if (val.startsWith('header_')) return;
+                setSelectedProfileId({...selectedProfileId, [user.id]: val});
+              }}
               placeholder="Chọn hồ sơ nhân sự..."
               closeOnSelect
             >
-              {profiles.map(p => (
-                <Select.Option key={p.id} value={p.id} title={`${p.fullName} (${p.employeeCode})`} />
-              ))}
+              {(() => {
+                const groupedOptions: React.ReactNode[] = [];
+                const processedIds = new Set<string>();
+
+                departments.forEach(dept => {
+                  const deptProfiles = profiles.filter(p => p.departmentId === dept.id);
+                  if (deptProfiles.length > 0) {
+                    groupedOptions.push(
+                      <Select.Option 
+                        key={`header_${dept.id}`} 
+                        value={`header_${dept.id}`} 
+                        title={`--- ${dept.name.toUpperCase()} ---`} 
+                        disabled 
+                        className="text-blue-600 font-semibold"
+                        style={{ color: '#2563eb', opacity: 1 }}
+                      />
+                    );
+                    deptProfiles.forEach(p => {
+                      groupedOptions.push(
+                        <Select.Option key={p.id} value={p.id} title={`${p.fullName} (${p.employeeCode})`} />
+                      );
+                      processedIds.add(p.id);
+                    });
+                  }
+                });
+
+                const otherProfiles = profiles.filter(p => !processedIds.has(p.id));
+                if (otherProfiles.length > 0) {
+                  groupedOptions.push(
+                    <Select.Option 
+                      key="header_other" 
+                      value="header_other" 
+                      title="--- KHÁC ---" 
+                      disabled 
+                      className="text-blue-600 font-semibold"
+                      style={{ color: '#2563eb', opacity: 1 }}
+                    />
+                  );
+                  otherProfiles.forEach(p => {
+                    groupedOptions.push(
+                      <Select.Option key={p.id} value={p.id} title={`${p.fullName} (${p.employeeCode})`} />
+                    );
+                  });
+                }
+
+                return groupedOptions;
+              })()}
             </Select>
           </Box>
 
